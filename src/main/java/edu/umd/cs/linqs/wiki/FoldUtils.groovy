@@ -39,7 +39,7 @@ class FoldUtils {
 			Partition observedData, Partition groundTruth, Partition train,
 			Partition test, Partition trainLabels, Set<DatabaseQuery> queries,
 			Set<Variable> keys) {
-		Random rand = new Random()
+		Random rand = new Random(0) // TODO: after debugging, remove fixed seed
 
 		log.debug("Splitting data from " + observedData + " with ratio " + ratio +
 				" into new partitions " + train +" and " + test)
@@ -94,10 +94,15 @@ class FoldUtils {
 					if (add) {
 						GroundAtom groundAtom = db.getAtom(predicate,  grounding)
 						insert.insertValue(groundAtom.getValue(), groundAtom.getArguments())
+						log.trace("Inserted " + groundAtom + " into " + p)
 					}
 				}
 			}
 		}
+		
+		db.close()
+		
+		db = data.getDatabase(groundTruth)
 
 		// move training labels from groundTruth into trainLabels
 		log.debug("Moving ground truth into split training label partitions")
@@ -119,6 +124,7 @@ class FoldUtils {
 				if (add) {
 					GroundAtom groundAtom = db.getAtom(predicate,  grounding)
 					insert.insertValue(groundAtom.getValue(), groundAtom.getArguments())
+					log.trace("Inserted " + groundAtom + " into " + trainLabels)
 				}
 			}
 		}
