@@ -53,10 +53,10 @@ m.add predicate: "Link", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "Talk", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 
 m.add rule : ( ClassifyCat(A,N) ) >> HasCat(A,N),  weight : 1.0
-m.add rule : ( HasCat(B,C) & Link(A,B) & (A - B) ) >> HasCat(A,C), weight: 1.0
+m.add rule : ( HasCat(B,C) & Link(A,B)) >> HasCat(A,C), weight: 1.0
 m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) ) >> HasCat(D,C), weight: 1.0
 
-m.add PredicateConstraint.PartialFunctional , on : HasCat
+m.add PredicateConstraint.Functional , on : HasCat
 
 Partition fullObserved =  new Partition(0)
 Partition groundTruth = new Partition(1)
@@ -97,51 +97,53 @@ double nbTrainingRatio = 0.3
 for (int i = 0; i < folds; i++) {
 	trainReadPartitions.add(i, new Partition(i + 2))
 	testReadPartitions.add(i, new Partition(i + folds + 2))
-	
+
 	trainWritePartitions.add(i, new Partition(i + 2*folds + 2))
 	testWritePartitions.add(i, new Partition(i + 3*folds + 2))
-	
+
 	trainLabelPartitions.add(i, new Partition(i + 4*folds + 2))
-	
-	Set<GroundTerm> [] documents = FoldUtils.generateRandomSplit(data, 0.5, 
-		fullObserved, groundTruth, trainReadPartitions.get(i), 
-		testReadPartitions.get(i), trainLabelPartitions.get(i), queries, 
-		keys)
+
+	Set<GroundTerm> [] documents = FoldUtils.generateRandomSplit(data, 0.5,
+			fullObserved, groundTruth, trainReadPartitions.get(i),
+			testReadPartitions.get(i), trainLabelPartitions.get(i), queries,
+			keys)
 	partitionDocuments.put(trainReadPartitions.get(i), documents[0])
 	partitionDocuments.put(testReadPartitions.get(i), documents[1])
-	
+
 	trainingKeys.add(i, new HashSet<Integer>())
 	foldKeys.add(i, new HashSet<Integer>())
-	
+
 	for (GroundTerm doc : partitionDocuments.get(trainReadPartitions.get(i))) {
 		if (rand.nextDouble() < nbTrainingRatio)
 			trainingKeys.get(i).add(Integer.decode(doc.toString()))
 		foldKeys.get(i).add(Integer.decode(doc.toString()))
 	}
-	
+
 	// add all trainingKeys into observed partition
 	Database db = data.getDatabase(trainLabelPartitions.get(i))
 	inserter = data.getInserter(HasCat, trainReadPartitions.get(i))
 	ResultList res = db.executeQuery(new DatabaseQuery(HasCat(X,Y).getFormula()))
-	for (GroundAtom atom : Queries.getAllAtoms(db, HasCat))
-		if (trainingKeys.contains(atom.getArguments()[0])) {
+	for (GroundAtom atom : Queries.getAllAtoms(db, HasCat)) {
+		Integer atomKey = Integer.decode(atom.getArguments()[0].toString())
+		if (trainingKeys.get(i).contains(atomKey)) {
 			inserter.insertValue(atom.getValue(), atom.getArguments())
-			log.debug("inserting " + atom.toString())
+			//log.debug("inserting " + atom.toString() + " w/ value " + atom.getValue())
 		}
+	}
 	db.close()
 }
 
-// do Naive Bayes training
 for (int fold = 0; fold < folds; fold++) {
 	Partition observedPartition = trainReadPartitions.get(fold)
 
+	// do Naive Bayes training
 	NaiveBayesUtil nb = new NaiveBayesUtil()
 
 	log.debug("training set unique IDS: " + trainingKeys)
 	nb.learn(trainingKeys.get(fold), "data/newCategoryBelonging.txt", "data/pruned-document.txt")
 
 	inserter = data.getInserter(ClassifyCat, observedPartition)
-	nb.insertAllProbabilities( "data/pruned-document.txt", foldKeys.get(fold), inserter)
+	nb.insertAllProbabilities("data/pruned-document.txt", foldKeys.get(fold), inserter)
 
 	def numCategories = 20
 
@@ -153,26 +155,27 @@ for (int fold = 0; fold < folds; fold++) {
 	for (int i = 0; i < numCategories; i++)
 		categoryGroundings.add(data.getUniqueID(i))
 
+
 	Variable Document = new Variable("Document")
 	Map<Variable, Set<GroundTerm>> substitutions = new HashMap<Variable, Set<GroundTerm>>()
 	substitutions.put(Document, partitionDocuments.get(observedPartition))
 	substitutions.put(Category, categoryGroundings)
 	dbPop.populate(new QueryAtom(HasCat, Document, Category), substitutions)
-	
+
 	/*
 	 * Weight learning
 	 */
-	MaxLikelihoodMPE mle = new MaxLikelihoodMPE(m, db, labelsDB, wikiBundle)
-	mle.learn()
-	log.debug(m.toString())
-	
+	//	MaxLikelihoodMPE mle = new MaxLikelihoodMPE(m, db, labelsDB, wikiBundle)
+	//	mle.learn()
+	//	log.debug(m.toString())
+
 	/*
 	 * Inference
 	 */
 	MPEInference mpe = new MPEInference(m, db, wikiBundle)
 	FullInferenceResult result = mpe.mpeInference()
 	System.out.println("Objective: " + result.getTotalIncompatibility())
-	
+
 	/*
 	 * Evaluation
 	 */
@@ -181,11 +184,11 @@ for (int fold = 0; fold < folds; fold++) {
 	comparator.setBaseline(groundTruthDB)
 	comparator.setResultFilter(new MaxValueFilter(HasCat, 1))
 	comparator.setThreshold(Double.MIN_VALUE) // treat best nonzero value as true
-	
+
 	DiscretePredictionStatistics stats = comparator.compare(HasCat)
 	System.out.println("F1 score " + stats.getF1(
-		DiscretePredictionStatistics.BinaryClass.POSITIVE))
-	
+			DiscretePredictionStatistics.BinaryClass.POSITIVE))
+
 	db.close()
 	groundTruthDB.close()
 }

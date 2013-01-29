@@ -27,13 +27,16 @@ public class NaiveBayesUtil {
 	private Logger log;
 	private Map<Integer, Map<Integer, Double>> wordProbs;
 	private Map<Integer, Double> labelPriors;
+	private Map<Integer, Double> classConstants;
 	private Set<Integer> allWords;
 
-	private final int prior = 1;
+	private final int prior = 10;
+	private final int catPrior = 10;
 
 	public NaiveBayesUtil() {
 		log = LoggerFactory.getLogger("NaiveBayesUtility");
 		labelPriors = new HashMap<Integer, Double>();
+		classConstants = new HashMap<Integer, Double>();
 		wordProbs = new HashMap<Integer, Map<Integer, Double>>();
 		allWords = new HashSet<Integer>();
 	}
@@ -125,9 +128,11 @@ public class NaiveBayesUtil {
 			// initialize category counter
 			Map<Integer, CounterMap<Integer>> catCounts = new HashMap<Integer, CounterMap<Integer>>();
 			for (Integer cat : catTotals.keySet())  {
-				labelPriors.put(cat, Math.log(catTotals.get(cat) + prior) - Math.log(documentCount)); 
+				labelPriors.put(cat, Math.log(catTotals.get(cat) + catPrior) - Math.log(documentCount)); 
 				catCounts.put(cat, new CounterMap<Integer>());
 			}
+			
+			log.debug("Label priors: " + labelPriors);
 
 			// load words
 			Scanner wordScanner = new Scanner(new FileReader(wordFile));
@@ -153,13 +158,20 @@ public class NaiveBayesUtil {
 			
 			for (Integer cat : catTotals.keySet()) {
 				HashMap<Integer, Double> probs = new HashMap<Integer, Double>();
+				double classConstant = 0.0;
 				for (Integer word : allWords) {
 					int count = catCounts.get(cat).get(word);
+					double denominator = Math.log(2*prior + catTotals.get(cat)); 
 					double logp = Math.log(prior + count) - 
 							Math.log(prior + catTotals.get(cat) - count);
+					classConstant += Math.log(prior + catTotals.get(cat) - count) - denominator;
+					//log.trace("Documents in category " + cat + " with word " + word + ": " + count
+					//		+ ", log prob " + logp);
 					probs.put(word, logp);
 				}
 				wordProbs.put(cat, probs);
+				
+				classConstants.put(cat, classConstant);
 				
 				catCounts.get(cat).clear();
 			}
@@ -184,7 +196,7 @@ public class NaiveBayesUtil {
 		for (Double score : scores.values())
 			normalizer += Math.exp(score - max);
 		for (Map.Entry<Integer, Double> e : scores.entrySet()) 
-			scores.put(e.getKey(), Math.exp(e.getValue() - max) / normalizer);
+			scores.put(e.getKey(), Math.exp(e.getValue() - max - Math.log(normalizer)));
 	}
 
 	private Set<Integer> parseWords(String string) {
@@ -207,9 +219,10 @@ public class NaiveBayesUtil {
 	public Map<Integer, Double> predict(Set<Integer> docWords) {
 		Map<Integer, Double> scores = new HashMap<Integer, Double>();
 		for (Integer cat : labelPriors.keySet()) {
-			double score = labelPriors.get(cat);
+			double score = labelPriors.get(cat) + classConstants.get(cat);
+			Map<Integer, Double> probs = wordProbs.get(cat);
 			for (Integer word : docWords) 
-				score += wordProbs.get(cat).get(word);
+				score += probs.get(word);
 
 			//log.trace("Document scores " + score + " for label " + cat);
 			scores.put(cat, score);
@@ -228,7 +241,7 @@ public class NaiveBayesUtil {
 		Map<Integer, Map<Integer, Double>> predictions = new HashMap<Integer, Map<Integer, Double>>();
 		// load words
 		try {
-			log.debug("Starting to load file for prediction");
+			log.trace("Starting to load file for prediction");
 			Scanner wordScanner = new Scanner(new FileReader(wordFile));
 			while (wordScanner.hasNext()) {
 				String line = wordScanner.nextLine();
@@ -238,9 +251,9 @@ public class NaiveBayesUtil {
 					Set<Integer> docWords = parseWords(tokens[1]);
 
 					predictions.put(docID, this.predict(docWords));
-					//log.trace("Document " + docID + " predicted label: " + predictions.get(docID));
-					//docWords.clear();
+					docWords.clear();
 				}
+				//log.trace("Document " + docID + ", prediction: " + predictions.get(docID));
 			}
 			wordScanner.close();
 			log.trace("Finished prediction on full file");
@@ -259,7 +272,7 @@ public class NaiveBayesUtil {
 	public void insertAllProbabilities(String wordFile, Set<Integer> documents, Inserter inserter) {
 		// load words
 		try {
-			log.debug("Starting to load file for prediction");
+			log.debug("Loading file for Naive Bayes prediction");
 			Scanner wordScanner = new Scanner(new FileReader(wordFile));
 			while (wordScanner.hasNext()) {
 				String line = wordScanner.nextLine();
@@ -272,6 +285,7 @@ public class NaiveBayesUtil {
 					
 					for (Map.Entry<Integer, Double> e : probs.entrySet()) {
 						inserter.insertValue(e.getValue(), docID, e.getKey());
+						log.trace("NB predicts p={} for {}", e.getValue(), e.getKey());
 					}
 				}
 			}
