@@ -221,8 +221,9 @@ public class NaiveBayesUtil {
 		for (Integer cat : labelPriors.keySet()) {
 			double score = labelPriors.get(cat) + classConstants.get(cat);
 			Map<Integer, Double> probs = wordProbs.get(cat);
-			for (Integer word : docWords) 
-				score += probs.get(word);
+			for (Integer word : docWords)
+				if (allWords.contains(word))
+					score += probs.get(word);
 
 			//log.trace("Document scores " + score + " for label " + cat);
 			scores.put(cat, score);

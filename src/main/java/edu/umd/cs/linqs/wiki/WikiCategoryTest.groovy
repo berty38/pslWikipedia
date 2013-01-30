@@ -8,7 +8,11 @@ import org.slf4j.LoggerFactory
 import edu.emory.mathcs.utils.ConcurrencyUtils
 import edu.umd.cs.psl.application.inference.MPEInference
 import edu.umd.cs.psl.application.learning.weight.MaxLikelihoodMPE
+import edu.umd.cs.psl.application.learning.weight.MaxMargin
+import edu.umd.cs.psl.application.learning.weight.MaxPseudoLikelihood
+import edu.umd.cs.psl.application.learning.weight.MetropolisHastingsRandOM
 import edu.umd.cs.psl.application.learning.weight.VotedPerceptron
+import edu.umd.cs.psl.application.learning.weight.HardEMRandOM
 import edu.umd.cs.psl.config.*
 import edu.umd.cs.psl.core.*
 import edu.umd.cs.psl.core.inference.*
@@ -29,12 +33,17 @@ import edu.umd.cs.psl.groovy.*
 import edu.umd.cs.psl.model.Model;
 import edu.umd.cs.psl.model.argument.ArgumentType
 import edu.umd.cs.psl.model.argument.GroundTerm
+import edu.umd.cs.psl.model.argument.UniqueID
 import edu.umd.cs.psl.model.argument.Variable
 import edu.umd.cs.psl.model.atom.GroundAtom
 import edu.umd.cs.psl.model.atom.QueryAtom
 import edu.umd.cs.psl.model.function.AttributeSimilarityFunction
 import edu.umd.cs.psl.ui.loading.*
 import edu.umd.cs.psl.util.database.Queries
+import edu.umd.cs.psl.model.kernel.CompatibilityKernel;
+import edu.umd.cs.psl.model.parameters.PositiveWeight;
+import com.google.common.collect.Iterables;
+
 
 Logger log = LoggerFactory.getLogger(this.class)
 
@@ -52,9 +61,15 @@ m.add predicate: "HasCat", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "Link", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "Talk", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 
-m.add rule : ( ClassifyCat(A,N) ) >> HasCat(A,N),  weight : 1.0
-m.add rule : ( HasCat(B,C) & Link(A,B)) >> HasCat(A,C), weight: 1.0
-m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) ) >> HasCat(D,C), weight: 1.0
+//m.add rule : ( ClassifyCat(A,N) ) >> HasCat(A,N),  weight : 1.0
+//m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) ) >> HasCat(D,C), weight: 1.0
+//m.add rule : ( HasCat(B,C) & Link(A,B)) >> HasCat(A,C), weight: 1.0
+for (int i = 1; i < 20; i++) {
+	UniqueID cat = data.getUniqueID(i)
+	m.add rule : ( ClassifyCat(A,cat) ) >> HasCat(A,cat),  weight : 1.0
+	m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0
+	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 1.0
+}
 
 m.add PredicateConstraint.Functional , on : HasCat
 
@@ -71,6 +86,7 @@ inserter = data.getInserter(HasCat, groundTruth)
 InserterUtils.loadDelimitedData(inserter, dataPath + "newCategoryBelonging.txt")
 
 folds = 1
+trainTestRatio = 0.5
 trainReadPartitions = new ArrayList<Partition>()
 testReadPartitions = new ArrayList<Partition>()
 trainWritePartitions = new ArrayList<Partition>()
@@ -91,7 +107,7 @@ keys.add(document)
 keys.add(linkedDocument)
 def partitionDocuments = new HashMap<Partition, Set<GroundTerm>>()
 
-Random rand = new Random(1) // TODO: after debugging, remove fixed seed
+Random rand = new Random()
 double nbTrainingRatio = 0.3
 
 for (int i = 0; i < folds; i++) {
@@ -103,7 +119,7 @@ for (int i = 0; i < folds; i++) {
 
 	trainLabelPartitions.add(i, new Partition(i + 4*folds + 2))
 
-	Set<GroundTerm> [] documents = FoldUtils.generateRandomSplit(data, 0.5,
+	Set<GroundTerm> [] documents = FoldUtils.generateRandomSplit(data, trainTestRatio,
 			fullObserved, groundTruth, trainReadPartitions.get(i),
 			testReadPartitions.get(i), trainLabelPartitions.get(i), queries,
 			keys)
@@ -133,7 +149,10 @@ for (int i = 0; i < folds; i++) {
 	db.close()
 }
 
+List<List<DiscretePredictionStatistics>> results = new ArrayList<List<DiscretePredictionStatistics>>()
+
 for (int fold = 0; fold < folds; fold++) {
+	results.add(fold, new ArrayList<DiscretePredictionStatistics>())
 	Partition observedPartition = trainReadPartitions.get(fold)
 
 	// do Naive Bayes training
@@ -144,15 +163,15 @@ for (int fold = 0; fold < folds; fold++) {
 
 	inserter = data.getInserter(ClassifyCat, observedPartition)
 	nb.insertAllProbabilities("data/pruned-document.txt", foldKeys.get(fold), inserter)
-
-	def numCategories = 20
-
+	
+	def numCategories = 19
+	
 	Database labelsDB = data.getDatabase(trainLabelPartitions.get(fold), [HasCat] as Set)
 	Database db = data.getDatabase(trainWritePartitions.get(fold), observedPartition)
 	DatabasePopulator dbPop = new DatabasePopulator(db)
 	Variable Category = new Variable("Category")
 	Set<GroundTerm> categoryGroundings = new HashSet<GroundTerm>()
-	for (int i = 0; i < numCategories; i++)
+	for (int i = 1; i <= numCategories; i++)
 		categoryGroundings.add(data.getUniqueID(i))
 
 
@@ -161,34 +180,71 @@ for (int fold = 0; fold < folds; fold++) {
 	substitutions.put(Document, partitionDocuments.get(observedPartition))
 	substitutions.put(Category, categoryGroundings)
 	dbPop.populate(new QueryAtom(HasCat, Document, Category), substitutions)
+	
+	for (int method = 0; method < 5; method++) {
+		// reset all weights to 1.0
+		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
+			k.setWeight(new PositiveWeight(1.0));
+		
+		/*
+		 * Weight learning
+		 */
+		learn(m, db, labelsDB, wikiBundle, method, log)
 
-	/*
-	 * Weight learning
-	 */
-	//	MaxLikelihoodMPE mle = new MaxLikelihoodMPE(m, db, labelsDB, wikiBundle)
-	//	mle.learn()
-	//	log.debug(m.toString())
+		log.debug(m.toString())
 
-	/*
-	 * Inference
-	 */
-	MPEInference mpe = new MPEInference(m, db, wikiBundle)
-	FullInferenceResult result = mpe.mpeInference()
-	System.out.println("Objective: " + result.getTotalIncompatibility())
+		/*
+		 * Inference
+		 */
+		MPEInference mpe = new MPEInference(m, db, wikiBundle)
+		FullInferenceResult result = mpe.mpeInference()
+		System.out.println("Objective: " + result.getTotalIncompatibility())
 
-	/*
-	 * Evaluation
-	 */
-	def comparator = new DiscretePredictionComparator(db)
-	def groundTruthDB = data.getDatabase(groundTruth, [HasCat] as Set)
-	comparator.setBaseline(groundTruthDB)
-	comparator.setResultFilter(new MaxValueFilter(HasCat, 1))
-	comparator.setThreshold(Double.MIN_VALUE) // treat best nonzero value as true
+		/*
+		 * Evaluation
+		 */
+		def comparator = new DiscretePredictionComparator(db)
+		def groundTruthDB = data.getDatabase(groundTruth, [HasCat] as Set)
+		comparator.setBaseline(groundTruthDB)
+		comparator.setResultFilter(new MaxValueFilter(HasCat, 1))
+		comparator.setThreshold(Double.MIN_VALUE) // treat best nonzero value as true
 
-	DiscretePredictionStatistics stats = comparator.compare(HasCat)
-	System.out.println("F1 score " + stats.getF1(
-			DiscretePredictionStatistics.BinaryClass.POSITIVE))
+		DiscretePredictionStatistics stats = comparator.compare(HasCat)
+		System.out.println("F1 score " + stats.getF1(
+				DiscretePredictionStatistics.BinaryClass.POSITIVE))
 
+		results.get(fold).add(method, stats)
+
+		groundTruthDB.close()
+	}
 	db.close()
-	groundTruthDB.close()
+}
+
+private void learn(Model m, Database db, Database labelsDB, ConfigBundle config, int method, Logger log) {
+	switch(method) {
+		case 0:
+			MaxLikelihoodMPE mle = new MaxLikelihoodMPE(m, db, labelsDB, config)
+			mle.learn()
+			break
+		case 1:
+		//MaxPseudoLikelihood mple = new MaxPseudoLikelihood(m, db, labelsDB, config)
+		//mple.learn()
+			break
+		case 2:
+			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
+			mm.setSlackPenalty(10000)
+			mm.learn()
+			break
+		case 3:
+			HardEMRandOM hardRandOM = new HardEMRandOM(m, db, labelsDB, config)
+			hardRandOM.setSlackPenalty(10000)
+			hardRandOM.learn()
+			break
+		case 4:
+			MetropolisHastingsRandOM randOM = new MetropolisHastingsRandOM(m, db, labelsDB, config)
+			randOM.learn()
+			break
+		default:
+			log.error("Invalid method num")
+	}
 }
