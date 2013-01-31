@@ -30,20 +30,23 @@ class FoldUtils {
 	 * creates two splits of data by randomly sampling from partition fullData 
 	 * and places one split in partition train and one in partition test.
 	 * @param data
-	 * @param ratio
+	 * @param trainTestRatio
 	 * @param fullData
 	 * @param train
 	 * @param test
+	 * @param filterRatio
 	 */
-	static Set<GroundTerm> [] generateRandomSplit(DataStore data, double ratio,
+	static Set<GroundTerm> [] generateRandomSplit(DataStore data, double trainTestRatio,
 			Partition observedData, Partition groundTruth, Partition train,
 			Partition test, Partition trainLabels, Set<DatabaseQuery> queries,
-			Set<Variable> keys) {
-		Random rand = new Random(0) // TODO: after debugging, remove fixed seed
+			Set<Variable> keys, double filterRatio) {
+		Random rand = new Random()
 
-		log.debug("Splitting data from " + observedData + " with ratio " + ratio +
+		log.debug("Splitting data from " + observedData + " with ratio " + trainTestRatio +
 				" into new partitions " + train +" and " + test)
-
+		
+		Partition dummy = new Partition(99999);
+		
 		def predicates = data.getRegisteredPredicates()
 		Database db = data.getDatabase(observedData)
 		Map<GroundTerm, Partition> keyMap = new HashMap<GroundTerm, Partition>()
@@ -56,7 +59,8 @@ class FoldUtils {
 					continue
 				for (int i = 0; i < groundings.size(); i++) {
 					GroundTerm [] grounding = groundings.get(i)
-					Partition p = (rand.nextDouble() < ratio) ? train : test;
+					Partition p = (rand.nextDouble() < trainTestRatio) ? train : test;
+					if (rand.nextDouble() >= filterRatio) p = dummy;
 					keyMap.put(grounding[keyIndex], p)
 				}
 			}
@@ -66,8 +70,11 @@ class FoldUtils {
 		splits[0] = new HashSet<GroundTerm>()
 		splits[1] = new HashSet<GroundTerm>()
 		for (Map.Entry<GroundTerm, Partition> e : keyMap.entrySet()) {
-			int index = (e.getValue() == train) ? 0 : 1
-			splits[index].add(e.getKey())
+			int index = -1;
+			if (e.getValue() == train) index = 0;
+			if (e.getValue() == test) index = 1;
+			if (index >= 0)
+				splits[index].add(e.getKey())
 		}
 
 		log.debug("Assigned " + splits[0].size() + " in train partition and " + splits[1].size() + " in test")
