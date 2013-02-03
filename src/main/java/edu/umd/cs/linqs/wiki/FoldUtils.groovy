@@ -38,15 +38,15 @@ class FoldUtils {
 	 */
 	static Set<GroundTerm> [] generateRandomSplit(DataStore data, double trainTestRatio,
 			Partition observedData, Partition groundTruth, Partition train,
-			Partition test, Partition trainLabels, Set<DatabaseQuery> queries,
+			Partition test, Partition trainLabels, Partition testLabels, Set<DatabaseQuery> queries,
 			Set<Variable> keys, double filterRatio) {
-		Random rand = new Random()
+		Random rand = new Random(0)
 
 		log.debug("Splitting data from " + observedData + " with ratio " + trainTestRatio +
 				" into new partitions " + train +" and " + test)
-		
+
 		Partition dummy = new Partition(99999);
-		
+
 		def predicates = data.getRegisteredPredicates()
 		Database db = data.getDatabase(observedData)
 		Map<GroundTerm, Partition> keyMap = new HashMap<GroundTerm, Partition>()
@@ -60,11 +60,12 @@ class FoldUtils {
 				for (int i = 0; i < groundings.size(); i++) {
 					GroundTerm [] grounding = groundings.get(i)
 					Partition p = (rand.nextDouble() < trainTestRatio) ? train : test;
-					if (rand.nextDouble() >= filterRatio) p = dummy;
+					if (rand.nextDouble() > filterRatio) p = dummy;
 					keyMap.put(grounding[keyIndex], p)
 				}
 			}
 		}
+		log.debug("Found {} unique keys", keyMap.size());
 
 		def splits = new HashSet<GroundTerm>[2]
 		splits[0] = new HashSet<GroundTerm>()
@@ -106,16 +107,16 @@ class FoldUtils {
 				}
 			}
 		}
-		
+
 		db.close()
-		
+
 		db = data.getDatabase(groundTruth)
 
-		// move training labels from groundTruth into trainLabels
-		log.debug("Moving ground truth into split training label partitions")
+		// move labels from groundTruth into trainLabels and testLabels
+		log.debug("Moving ground truth into split training and testing label partitions")
 		for (DatabaseQuery q : queries) {
 			Predicate predicate = getPredicate(q)
-
+			// insert into train label partition
 			Inserter insert = data.getInserter(predicate, trainLabels)
 
 			ResultList groundings = db.executeQuery(q)
@@ -132,6 +133,25 @@ class FoldUtils {
 					GroundAtom groundAtom = db.getAtom(predicate,  grounding)
 					insert.insertValue(groundAtom.getValue(), groundAtom.getArguments())
 					log.trace("Inserted " + groundAtom + " into " + trainLabels)
+				}
+			}
+
+			insert = data.getInserter(predicate, testLabels)
+
+			groundings = db.executeQuery(q)
+			for (int i = 0; i < groundings.size(); i++) {
+				GroundTerm [] grounding = groundings.get(i)
+				// check if all keys in this ground term are in this split
+				boolean add = true
+				for (Variable key : keys) {
+					int keyIndex = q.getVariableIndex(key)
+					if (keyIndex != -1 && keyMap.get(grounding[keyIndex]) != test)
+						add = false
+				}
+				if (add) {
+					GroundAtom groundAtom = db.getAtom(predicate,  grounding)
+					insert.insertValue(groundAtom.getValue(), groundAtom.getArguments())
+					log.trace("Inserted " + groundAtom + " into " + testLabels)
 				}
 			}
 		}

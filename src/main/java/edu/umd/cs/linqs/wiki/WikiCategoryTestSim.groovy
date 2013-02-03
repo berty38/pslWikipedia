@@ -10,12 +10,11 @@ import org.slf4j.LoggerFactory
 
 import edu.emory.mathcs.utils.ConcurrencyUtils
 import edu.umd.cs.psl.application.inference.MPEInference
-import edu.umd.cs.psl.application.learning.weight.MaxLikelihoodMPE
-import edu.umd.cs.psl.application.learning.weight.MaxMargin
-import edu.umd.cs.psl.application.learning.weight.MaxPseudoLikelihood
-import edu.umd.cs.psl.application.learning.weight.MetropolisHastingsRandOM
-import edu.umd.cs.psl.application.learning.weight.VotedPerceptron
-import edu.umd.cs.psl.application.learning.weight.HardEMRandOM
+import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxLikelihoodMPE
+import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin
+import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxPseudoLikelihood
+import edu.umd.cs.psl.application.learning.weight.random.FirstOrderMetropolisRandOM
+import edu.umd.cs.psl.application.learning.weight.random.HardEMRandOM
 import edu.umd.cs.psl.config.*
 import edu.umd.cs.psl.core.*
 import edu.umd.cs.psl.core.inference.*
@@ -45,11 +44,12 @@ import edu.umd.cs.psl.ui.loading.*
 import edu.umd.cs.psl.util.database.Queries
 import edu.umd.cs.psl.model.kernel.CompatibilityKernel;
 import edu.umd.cs.psl.model.parameters.PositiveWeight;
+import edu.umd.cs.psl.model.parameters.Weight
 import com.google.common.collect.Iterables;
 
 //methods = ["RandOM", "MM1", "MM10", "MM100", "MM1000", "MLE"]
-//methods = ["MLE", "RandOM", "MM1"]
-methods = ["RandOM"]
+//methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
+methods = ["NONE", "MLE", "MPLE", "MM1", "MM10"]
 
 Logger log = LoggerFactory.getLogger(this.class)
 
@@ -65,22 +65,25 @@ PSLModel m = new PSLModel(this, data)
 /*
  * DEFINE MODEL
  */
-m.add predicate: "ClassifyCat", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate: "Similar", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "HasCat", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "Link", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "Talk", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 
-m.add rule : ( ClassifyCat(A,N) ) >> HasCat(A,N),  weight : 1.0
-m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) ) >> HasCat(D,C), weight: 1.0
-m.add rule : ( HasCat(B,C) & Link(A,B)) >> HasCat(A,C), weight: 1.0
-//for (int i = 1; i < 20; i++) {
-//	UniqueID cat = data.getUniqueID(i)
-//	m.add rule : ( ClassifyCat(A,cat) ) >> HasCat(A,cat),  weight : 1.0
-//	m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0
-//	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 1.0
-//}
+//prior
+m.add rule : ~(HasCat(A,N)), weight: 1.0
 
-m.add PredicateConstraint.PartialFunctional , on : HasCat
+m.add rule : ( Similar(A,B) & HasCat(A,C) ) >> HasCat(B,C),  weight : 1.0
+m.add rule : ( HasCat(B,C) & Link(A,B) & (A - B)) >> HasCat(A,C), weight: 1.0
+m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) ) >> HasCat(D,C), weight: 1.0
+for (int i = 1; i < 20; i++) {
+	UniqueID cat = data.getUniqueID(i)
+	m.add rule : ( Similar(A,B) & HasCat(A,cat) ) >> HasCat(B,cat),  weight : 1.0
+	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 1.0
+	m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0
+}
+
+m.add PredicateConstraint.Functional , on : HasCat
 
 
 
@@ -97,14 +100,12 @@ def dataPath = "./data/"
 def inserter
 inserter = data.getInserter(Link, fullObserved)
 InserterUtils.loadDelimitedData(inserter, dataPath + "uniqueLinks.txt")
+inserter = data.getInserter(Similar, fullObserved)
+InserterUtils.loadDelimitedDataTruth(inserter, dataPath + "documentSimilarity.txt")
 inserter = data.getInserter(Talk, fullObserved)
 InserterUtils.loadDelimitedData(inserter, dataPath + "talk.txt")
 inserter = data.getInserter(HasCat, groundTruth)
 InserterUtils.loadDelimitedData(inserter, dataPath + "newCategoryBelonging.txt")
-
-
-
-
 
 
 
@@ -113,15 +114,18 @@ folds = 1
 // ratio of train to test splits
 trainTestRatio = 0.5
 // ratio of documents to keep (throw away the rest)
-filterRatio = 0.02
+filterRatio = 0.1
 trainReadPartitions = new ArrayList<Partition>()
 testReadPartitions = new ArrayList<Partition>()
 trainWritePartitions = new ArrayList<Partition>()
 testWritePartitions = new ArrayList<Partition>()
 trainLabelPartitions = new ArrayList<Partition>()
+testLabelPartitions = new ArrayList<Partition>()
+
 
 def keys = new HashSet<Variable>()
-ArrayList<Set<Integer>> nbTrainingKeys = new ArrayList<Set<Integer>>()
+ArrayList<Set<Integer>> trainingSeedKeys = new ArrayList<Set<Integer>>()
+ArrayList<Set<Integer>> testingSeedKeys = new ArrayList<Set<Integer>>()
 ArrayList<Set<Integer>> trainingKeys = new ArrayList<Set<Integer>>()
 ArrayList<Set<Integer>> testingKeys = new ArrayList<Set<Integer>>()
 def queries = new HashSet<DatabaseQuery>()
@@ -134,15 +138,15 @@ Variable document = new Variable("Document")
 Variable linkedDocument = new Variable("LinkedDoc")
 keys.add(document)
 keys.add(linkedDocument)
-queries.add(new DatabaseQuery(ClassifyCat(document,N).getFormula()))
+queries.add(new DatabaseQuery(Similar(document, linkedDocument).getFormula()))
 queries.add(new DatabaseQuery(Link(document, linkedDocument).getFormula()))
 queries.add(new DatabaseQuery(Talk(document, A).getFormula()))
 queries.add(new DatabaseQuery(HasCat(document, A).getFormula()))
 
 def partitionDocuments = new HashMap<Partition, Set<GroundTerm>>()
 
-Random rand = new Random()
-double trainingObservedRatio = 0.3
+Random rand = new Random(0)
+double seedRatio = 0.2
 
 for (int i = 0; i < folds; i++) {
 	trainReadPartitions.add(i, new Partition(i + 2))
@@ -152,38 +156,57 @@ for (int i = 0; i < folds; i++) {
 	testWritePartitions.add(i, new Partition(i + 3*folds + 2))
 
 	trainLabelPartitions.add(i, new Partition(i + 4*folds + 2))
-
+	testLabelPartitions.add(i, new Partition(i + 5*folds + 2))
+	
 	Set<GroundTerm> [] documents = FoldUtils.generateRandomSplit(data, trainTestRatio,
 			fullObserved, groundTruth, trainReadPartitions.get(i),
-			testReadPartitions.get(i), trainLabelPartitions.get(i), queries,
-			keys, filterRatio)
+			testReadPartitions.get(i), trainLabelPartitions.get(i), 
+			testLabelPartitions.get(i), queries, keys, filterRatio)
 	partitionDocuments.put(trainReadPartitions.get(i), documents[0])
 	partitionDocuments.put(testReadPartitions.get(i), documents[1])
 
-	nbTrainingKeys.add(i, new HashSet<Integer>())
+	trainingSeedKeys.add(i, new HashSet<Integer>())
+	testingSeedKeys.add(i, new HashSet<Integer>())
 	trainingKeys.add(i, new HashSet<Integer>())
 	testingKeys.add(i, new HashSet<Integer>())
 
 	for (GroundTerm doc : partitionDocuments.get(trainReadPartitions.get(i))) {
-		if (rand.nextDouble() < trainingObservedRatio)
-			nbTrainingKeys.get(i).add(Integer.decode(doc.toString()))
+		if (rand.nextDouble() < seedRatio)
+			trainingSeedKeys.get(i).add(Integer.decode(doc.toString()))
 		trainingKeys.get(i).add(Integer.decode(doc.toString()))
 	}
 	for (GroundTerm doc : partitionDocuments.get(testReadPartitions.get(i))) {
+		if (rand.nextDouble() < seedRatio)
+			testingSeedKeys.get(i).add(Integer.decode(doc.toString()))
 		testingKeys.get(i).add(Integer.decode(doc.toString()))
 	}
 
-	// add all nbKeys into observed partition
-	Database db = data.getDatabase(trainLabelPartitions.get(i))
-	inserter = data.getInserter(HasCat, trainReadPartitions.get(i))
+	// add all seedKeys into observed partition
+	Database db = data.getDatabase(groundTruth)
+	def trainInserter = data.getInserter(HasCat, trainReadPartitions.get(i))
+	def testInserter = data.getInserter(HasCat, testReadPartitions.get(i))
 	ResultList res = db.executeQuery(new DatabaseQuery(HasCat(X,Y).getFormula()))
 	for (GroundAtom atom : Queries.getAllAtoms(db, HasCat)) {
 		Integer atomKey = Integer.decode(atom.getArguments()[0].toString())
-		if (nbTrainingKeys.get(i).contains(atomKey)) {
-			inserter.insertValue(atom.getValue(), atom.getArguments())
+		if (trainingSeedKeys.get(i).contains(atomKey)) {
+			trainInserter.insertValue(atom.getValue(), atom.getArguments())
+			//log.debug("inserting " + atom.toString() + " w/ value " + atom.getValue())
+		}
+
+		if (testingSeedKeys.get(i).contains(atomKey)) {
+			testInserter.insertValue(atom.getValue(), atom.getArguments())
 			//log.debug("inserting " + atom.toString() + " w/ value " + atom.getValue())
 		}
 	}
+	db.close()
+	
+	db = data.getDatabase(trainReadPartitions.get(i))
+	ResultList list = db.executeQuery(new DatabaseQuery(HasCat(X,Y).getFormula()))
+	log.debug("{} instances of HasCat in {}", list.size(), trainReadPartitions.get(i))
+	db.close()
+	db = data.getDatabase(testReadPartitions.get(i))
+	list = db.executeQuery(new DatabaseQuery(HasCat(X,Y).getFormula()))
+	log.debug("{} instances of HasCat in {}", list.size(), testReadPartitions.get(i))
 	db.close()
 }
 
@@ -192,21 +215,6 @@ for (String method : methods)
 	results.put(method, new ArrayList<DiscretePredictionStatistics>())
 
 for (int fold = 0; fold < folds; fold++) {
-	/*
-	 * ADD EXTERNALLY COMPUTED EVIDENCE
-	 */
-	// do Naive Bayes training
-	NaiveBayesUtil nb = new NaiveBayesUtil()
-
-	log.debug("training set unique IDS: " + nbTrainingKeys)
-	nb.learn(nbTrainingKeys.get(fold), "data/newCategoryBelonging.txt", "data/pruned-document.txt")
-
-	inserter = data.getInserter(ClassifyCat, trainReadPartitions.get(fold))
-	nb.insertAllProbabilities("data/pruned-document.txt", trainingKeys.get(fold), inserter)
-
-	inserter = data.getInserter(ClassifyCat, testReadPartitions.get(fold))
-	nb.insertAllProbabilities("data/pruned-document.txt", testingKeys.get(fold), inserter)
-
 
 	Database trainDB = data.getDatabase(trainWritePartitions.get(fold), trainReadPartitions.get(fold))
 	Database testDB = data.getDatabase(testWritePartitions.get(fold), testReadPartitions.get(fold))
@@ -246,11 +254,14 @@ for (int fold = 0; fold < folds; fold++) {
 
 	Database labelsDB = data.getDatabase(trainLabelPartitions.get(fold), targetPredicates)
 
+	// get all default weights
+	Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
+	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
+		weights.put(k, k.getWeight());
 
 	for (String method : methods) {
-		// reset all weights to 1.0
 		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-			k.setWeight(new PositiveWeight(1.0));
+			k.setWeight(weights.get(k))
 
 		/*
 		 * Weight learning
@@ -264,18 +275,19 @@ for (int fold = 0; fold < folds; fold++) {
 		 */
 		MPEInference mpe = new MPEInference(m, testDB, wikiBundle)
 		FullInferenceResult result = mpe.mpeInference()
-		System.out.println("Objective: " + result.getTotalIncompatibility())
+		System.out.println("Objective: " + result.getTotalWeightedIncompatibility())
 
 		/*
 		 * Evaluation
 		 */
 		def comparator = new DiscretePredictionComparator(testDB)
-		def groundTruthDB = data.getDatabase(groundTruth, [HasCat] as Set)
+		def groundTruthDB = data.getDatabase(testLabelPartitions.get(fold), [HasCat] as Set)
 		comparator.setBaseline(groundTruthDB)
 		comparator.setResultFilter(new MaxValueFilter(HasCat, 1))
 		comparator.setThreshold(Double.MIN_VALUE) // treat best nonzero value as true
-
-		DiscretePredictionStatistics stats = comparator.compare(HasCat)
+		
+		int totalTestExamples = testingKeys.get(fold).size() * numCategories;
+		DiscretePredictionStatistics stats = comparator.compare(HasCat, totalTestExamples)
 		System.out.println("F1 score " + stats.getF1(
 				DiscretePredictionStatistics.BinaryClass.POSITIVE))
 
@@ -339,7 +351,7 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 		//hardRandOM.learn()
 			break
 		case "RandOM":
-			MetropolisHastingsRandOM randOM = new MetropolisHastingsRandOM(m, db, labelsDB, config)
+			FirstOrderMetropolisRandOM randOM = new FirstOrderMetropolisRandOM(m, db, labelsDB, config)
 			randOM.learn()
 			break
 		default:
