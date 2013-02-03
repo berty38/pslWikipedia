@@ -13,9 +13,11 @@ import edu.umd.cs.psl.model.argument.GroundTerm
 import edu.umd.cs.psl.model.argument.Variable
 import edu.umd.cs.psl.model.atom.Atom
 import edu.umd.cs.psl.model.atom.GroundAtom
+import edu.umd.cs.psl.model.atom.ObservedAtom
 import edu.umd.cs.psl.model.atom.QueryAtom
 import edu.umd.cs.psl.model.predicate.Predicate
 import edu.umd.cs.psl.model.predicate.StandardPredicate
+import edu.umd.cs.psl.util.database.Queries
 
 
 import org.slf4j.Logger;
@@ -36,12 +38,11 @@ class FoldUtils {
 	 * @param test
 	 * @param filterRatio
 	 */
-	static Set<GroundTerm> [] generateRandomSplit(DataStore data, double trainTestRatio,
+	public static Set<GroundTerm> [] generateRandomSplit(DataStore data, double trainTestRatio,
 			Partition observedData, Partition groundTruth, Partition train,
 			Partition test, Partition trainLabels, Partition testLabels, Set<DatabaseQuery> queries,
 			Set<Variable> keys, double filterRatio) {
-		Random rand = new Random(0)
-
+		Random rand = new Random(0);
 		log.debug("Splitting data from " + observedData + " with ratio " + trainTestRatio +
 				" into new partitions " + train +" and " + test)
 
@@ -160,6 +161,65 @@ class FoldUtils {
 		return splits
 	}
 
+	/**
+	 * Generates a list of sets of GroundTerm []s from all groundings of provided predicates and partitions
+	 * Randomly splits uniformly among n sets
+	 * @param data 
+	 * @param predicates Predicates to distribute
+	 * @param partitions partitions to look in
+	 * @param n number of splits to make
+	 * @return length n list of sets of GroundTerm arrays
+	 */
+	public static List<Set<GroundingWrapper>> splitGroundings(DataStore data, Collection<Predicate> predicates,
+			Collection<Partition> partitions, int n) {
+		Random rand = new Random(0)
+		List<Set<GroundingWrapper>> groundings = new ArrayList<Set<GroundingWrapper>>(n)
+		for (int i = 0; i < n; i++)
+			groundings.add(i, new HashSet<GroundingWrapper>())
+
+		Set<GroundingWrapper> allGroundings = new HashSet<GroundingWrapper>()
+		for (Partition part : partitions) {
+			Database db = data.getDatabase(part)
+			for (Predicate pred : predicates) {
+				Set<GroundAtom> list = Queries.getAllAtoms(db, pred)
+				for (GroundAtom atom : list)
+					allGroundings.add(new GroundingWrapper(atom.getArguments()))
+			}
+			db.close()
+		}
+
+		for (GroundingWrapper grounding : allGroundings) {
+			int i = rand.nextInt() % n
+			groundings.get(i).add(grounding)
+		}
+		return groundings
+	}
+
+	/**
+	 * Copies groundings of predicate from one partition to another
+	 * @param data
+	 * @param from
+	 * @param to
+	 * @param predicate
+	 * @param groundings
+	 */
+	public static void copy(DataStore data, Partition from, Partition to, Predicate predicate, Set<GroundingWrapper> groundings) {
+		Inserter insert = data.getInserter(predicate, to)
+
+		Database db = data.getDatabase(from, [predicate] as Set)
+
+		for (GroundingWrapper grounding : groundings) {
+			//log.debug("grounding length {}, first arg {}", grounding.length, grounding[0])
+			GroundAtom atom = db.getAtom(predicate, grounding.getArray())
+
+			if (atom instanceof ObservedAtom)
+				insert.insertValue(atom.getValue(), grounding.getArray())
+			else
+				log.debug("Encountered non-ObservedAtom, " + atom)
+		}
+		db.close()
+	}
+
 	private static Predicate getPredicate(DatabaseQuery q) {
 		Set<Atom> atoms = new HashSet<Atom>()
 		q.getFormula().getAtoms(atoms)
@@ -169,4 +229,24 @@ class FoldUtils {
 		Predicate predicate = atom.getPredicate()
 		return predicate
 	}
+	
+	private class GroundingWrapper {
+		private GroundTerm [] grounding
+		
+		public GroundingWrapper(GroundTerm [] args) {
+			grounding = args
+		}
+		
+		public GroundTerm [] getArray() { return grounding }
+		
+		@Override
+		public boolean equals(Object oth) {
+			GroundingWrapper gw = (GroundingWrapper) oth
+			if (gw.getArray().length != grounding.length)
+				return false
+			
+		}
+		
+	}
+
 }
