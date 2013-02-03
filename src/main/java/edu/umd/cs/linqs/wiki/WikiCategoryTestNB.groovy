@@ -50,7 +50,7 @@ import com.google.common.collect.Iterables;
 //methods = ["RandOM", "MM1", "MM10", "MM100", "MM1000", "MLE"]
 //methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
 //methods = ["None"]
-methods = ["NONE", "MLE", "MPLE", "MM1", "MM10"]
+methods = ["MPLE", "NONE", "MLE", "MM1", "MM10"]
 
 Logger log = LoggerFactory.getLogger(this.class)
 

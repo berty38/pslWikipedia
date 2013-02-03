@@ -18,6 +18,7 @@ import edu.umd.cs.psl.model.atom.QueryAtom
 import edu.umd.cs.psl.model.predicate.Predicate
 import edu.umd.cs.psl.model.predicate.StandardPredicate
 import edu.umd.cs.psl.util.database.Queries
+import edu.umd.cs.linqs.wiki.GroundingWrapper
 
 
 import org.slf4j.Logger;
@@ -37,7 +38,7 @@ class FoldUtils {
 	 * @param train
 	 * @param test
 	 * @param filterRatio
-	 */
+	 */ 
 	public static Set<GroundTerm> [] generateRandomSplit(DataStore data, double trainTestRatio,
 			Partition observedData, Partition groundTruth, Partition train,
 			Partition test, Partition trainLabels, Partition testLabels, Set<DatabaseQuery> queries,
@@ -55,7 +56,7 @@ class FoldUtils {
 			ResultList groundings = db.executeQuery(q)
 
 			for (Variable key : keys) {
-				int keyIndex = q.getVariableIndex(key)
+ 				int keyIndex = q.getVariableIndex(key)
 				if (keyIndex == -1)
 					continue
 				for (int i = 0; i < groundings.size(); i++) {
@@ -190,6 +191,7 @@ class FoldUtils {
 
 		for (GroundingWrapper grounding : allGroundings) {
 			int i = rand.nextInt() % n
+			if (i < 0) i += n
 			groundings.get(i).add(grounding)
 		}
 		return groundings
@@ -229,24 +231,4 @@ class FoldUtils {
 		Predicate predicate = atom.getPredicate()
 		return predicate
 	}
-	
-	private class GroundingWrapper {
-		private GroundTerm [] grounding
-		
-		public GroundingWrapper(GroundTerm [] args) {
-			grounding = args
-		}
-		
-		public GroundTerm [] getArray() { return grounding }
-		
-		@Override
-		public boolean equals(Object oth) {
-			GroundingWrapper gw = (GroundingWrapper) oth
-			if (gw.getArray().length != grounding.length)
-				return false
-			
-		}
-		
-	}
-
 }

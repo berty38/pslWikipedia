@@ -111,7 +111,7 @@ inserter = data.getInserter(trusts, fullTrusts)
 InserterUtils.loadDelimitedDataTruth(inserter, dataPath + "trusts.txt")
 
 // number of folds
-folds = 1
+folds = 8
 // ratio of train to test splits
 trainTestRatio = 0.5
 // ratio of documents to keep (throw away the rest)
@@ -160,6 +160,7 @@ for (int fold = 0; fold < folds; fold++) {
 	ArrayList<Partition> trainReadPartitions = new ArrayList<Partition>();
 	ArrayList<Partition> testReadPartitions = new ArrayList<Partition>();
 	int trainingTarget = (fold - 1) % folds
+	if (trainingTarget < 0) trainingTarget += folds
 	Partition trainLabelPartition = trustsPartitions.get(trainingTarget)
 	for (int i = 0; i < folds; i++) {
 		if (i != fold) {
@@ -175,8 +176,8 @@ for (int fold = 0; fold < folds; fold++) {
 	Partition testLabelPartition = trustsPartitions.get(fold)
 
 	// open databases
-	Database trainDB = data.getDatabase(trainWritePartitions.get(fold), trainReadPartitions.toArray())
-	Database testDB = data.getDatabase(testWritePartitions.get(fold), testReadPartitions.toArray())
+	Database trainDB = data.getDatabase(trainWritePartitions.get(fold), (Partition []) trainReadPartitions.toArray())
+	Database testDB = data.getDatabase(testWritePartitions.get(fold), (Partition []) testReadPartitions.toArray())
 
 
 	/*
@@ -185,7 +186,8 @@ for (int fold = 0; fold < folds; fold++) {
 	 */
 	int rv = 0, ob = 0
 	ResultList allGroundings = trainDB.executeQuery(Queries.getQueryForAllAtoms(knows))
-	for (GroundTerm [] grounding : allGroundings) {
+	for (int i = 0; i < allGroundings.size(); i++) {
+		GroundTerm [] grounding = allGroundings.get(i)
 		GroundAtom atom = trainDB.getAtom(trusts, grounding)
 		if (atom instanceof RandomVariableAtom) {
 			rv++
@@ -198,15 +200,17 @@ for (int fold = 0; fold < folds; fold++) {
 	/**
 	 * POPULATE TEST DATABASE
 	 */
-	results = testDB.executeQuery(Queries.getQueryForAllAtoms(knows))
-	for (GroundTerm [] grounding : results) {
+	allGroundings = testDB.executeQuery(Queries.getQueryForAllAtoms(knows))
+	for (int i = 0; i < allGroundings.size(); i++) {
+		GroundTerm [] grounding = allGroundings.get(i)
 		GroundAtom atom = testDB.getAtom(trusts, grounding)
 		if (atom instanceof RandomVariableAtom) {
 			testDB.commit((RandomVariableAtom) atom);
 		}
 	}
 
-	Database labelsDB = data.getDatabase(trainLabelPartition, [trusts] as Set)
+	Partition dummy = new Partition(99999)
+	Database labelsDB = data.getDatabase(dummy, [trusts] as Set, trainLabelPartition)
 
 	// get all default weights
 	Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
@@ -233,17 +237,17 @@ for (int fold = 0; fold < folds; fold++) {
 
 		/*
 		 * Evaluation
+		 * TODO: implement area under PR curve
 		 */
 		def comparator = new DiscretePredictionComparator(testDB)
 		def groundTruthDB = data.getDatabase(testLabelPartition, [trusts] as Set)
 		comparator.setBaseline(groundTruthDB)
-		comparator.setResultFilter(new MaxValueFilter(HasCat, 1))
-		comparator.setThreshold(Double.MIN_VALUE) // treat best nonzero value as true
+		comparator.setThreshold(0.5)
 
 		//System.out.println("totalTestExamples " + totalTestExamples)
 		DiscretePredictionStatistics stats = comparator.compare(trusts)
 		System.out.println("F1 score " + stats.getF1(
-				DiscretePredictionStatistics.BinaryClass.POSITIVE))
+				DiscretePredictionStatistics.BinaryClass.NEGATIVE))
 
 		results.get(method).add(fold, stats)
 
