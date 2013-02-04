@@ -30,6 +30,8 @@ import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver.Type
 import edu.umd.cs.psl.evaluation.result.*
 import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionComparator
 import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionStatistics
+import edu.umd.cs.psl.evaluation.statistics.RankingScore
+import edu.umd.cs.psl.evaluation.statistics.SimpleRankingComparator
 import edu.umd.cs.psl.evaluation.statistics.filter.MaxValueFilter
 import edu.umd.cs.psl.groovy.*
 import edu.umd.cs.psl.model.Model;
@@ -52,16 +54,17 @@ import com.google.common.collect.Iterables;
 
 //methods = ["RandOM", "MM1", "MM10", "MM100", "MM1000", "MLE"]
 //methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
-//methods = ["None"]
 methods = ["NONE", "MLE", "MPLE", "MM1", "MM10"]
+//methods = ["MLE"]
+//methods = ["None"]
 
 Logger log = LoggerFactory.getLogger(this.class)
 
 ConfigManager cm = ConfigManager.getManager()
-ConfigBundle epinionsBundle = cm.getBundle("wiki")
+ConfigBundle epinionsBundle = cm.getBundle("epinions")
 
 def defaultPath = System.getProperty("java.io.tmpdir")
-String dbpath = epinionsBundle.getString("dbpath", defaultPath + "psl")
+String dbpath = epinionsBundle.getString("dbpath", defaultPath + "pslEpinions")
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), epinionsBundle)
 
 PSLModel m = new PSLModel(this, data)
@@ -71,34 +74,40 @@ PSLModel m = new PSLModel(this, data)
  */
 m.add predicate: "knows", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "trusts", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate: "prior", types: [ArgumentType.UniqueID]
 
-//prior
-m.add rule : ~(trusts(A,B)), weight: 1.0
+boolean sq = false
 
-m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & trusts(B,C)) >> trusts(A,C), weight: 1.0   //FFpp
-m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & ~trusts(B,C)) >> ~trusts(A,C), weight: 1.0 //FFpm
-m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & ~trusts(A,B) & trusts(B,C)) >> ~trusts(A,C), weight: 1.0 //FFmp
-m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & ~trusts(A,B) & ~trusts(B,C)) >> trusts(A,C), weight: 1.0 //FFmm
+m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: 1.0, squared: sq   //FFpp
+m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: 1.0, squared: sq //FFpm
+m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & ~trusts(A,B) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: 1.0, squared: sq //FFmp
+m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & ~trusts(A,B) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: 1.0, squared: sq //FFmm
 
-m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & trusts(A,B) & trusts(C,B)) >> trusts(A,C), weight: 1.0   //FBpp
-m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & trusts(A,B) & ~trusts(C,B)) >> ~trusts(A,C), weight: 1.0 //FBpm
-m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & ~trusts(A,B) & trusts(C,B)) >> ~trusts(A,C), weight: 1.0 //FBmp
-m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & ~trusts(A,B) & ~trusts(C,B)) >> trusts(A,C), weight: 1.0 //FBmm
+m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & trusts(A,B) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq  //FBpp
+m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & trusts(A,B) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //FBpm
+m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & ~trusts(A,B) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //FBmp
+m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & ~trusts(A,B) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq //FBmm
 
-m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & trusts(B,A) & trusts(B,C)) >> trusts(A,C), weight: 1.0   //BFpp
-m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & trusts(B,A) & ~trusts(B,C)) >> ~trusts(A,C), weight: 1.0 //BFpm
-m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & ~trusts(B,A) & trusts(B,C)) >> ~trusts(A,C), weight: 1.0 //BFmp
-m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & ~trusts(B,A) & ~trusts(B,C)) >> trusts(A,C), weight: 1.0 //BFmm
+m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & trusts(B,A) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq   //BFpp
+m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & trusts(B,A) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //BFpm
+m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & ~trusts(B,A) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //BFmp
+m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & ~trusts(B,A) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq //BFmm
 
-m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & trusts(B,A) & trusts(C,B)) >> trusts(A,C), weight: 1.0   //BBpp
-m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & trusts(B,A) & ~trusts(C,B)) >> ~trusts(A,C), weight: 1.0 //BBpm
-m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & ~trusts(B,A) & trusts(C,B)) >> ~trusts(A,C), weight: 1.0 //BBmp
-m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & ~trusts(B,A) & ~trusts(C,B)) >> trusts(A,C), weight: 1.0 //BBmm
+m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & trusts(B,A) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq   //BBpp
+m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & trusts(B,A) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //BBpm
+m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & ~trusts(B,A) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //BBmp
+m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & ~trusts(B,A) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq //BBmm
 
+m.add rule: (knows(A,B) & knows(B,A) & trusts(A,B)) >> trusts(B,A), weight: 1.0, squared: sq
+m.add rule: (knows(A,B) & knows(B,A) & ~trusts(A,B)) >> ~trusts(B,A), weight: 1.0, squared: sq
+
+// two-sided prior
+UniqueID constant = data.getUniqueID(0)
+m.add rule: (knows(A,B) & prior(constant)) >> trusts(A,B), weight: 1.0, squared: sq
+m.add rule: (knows(A,B) & trusts(A,B)) >> prior(constant), weight: 1.0, squared: sq
 
 Partition fullKnows =  new Partition(0)
 Partition fullTrusts = new Partition(1)
-
 
 /*
  * LOAD DATA
@@ -112,24 +121,23 @@ InserterUtils.loadDelimitedDataTruth(inserter, dataPath + "trusts.txt")
 
 // number of folds
 folds = 8
-// ratio of train to test splits
-trainTestRatio = 0.5
-// ratio of documents to keep (throw away the rest)
-filterRatio = 1.0
 
 List<Partition> trustsPartitions = new ArrayList<Partition>(folds)
 List<Partition> knowsPartitions = new ArrayList<Partition>(folds)
 List<Partition> trainWritePartitions = new ArrayList<Partition>(folds)
 List<Partition> testWritePartitions = new ArrayList<Partition>(folds)
+List<Partition> trainPriorPartitions = new ArrayList<Partition>(folds)
+List<Partition> testPriorPartitions = new ArrayList<Partition>(folds)
 
 Random rand = new Random(0)
-double trainingObservedRatio = 0.6
 
 for (int i = 0; i < folds; i++) {
 	knowsPartitions.add(i, new Partition(i + 2))
 	trustsPartitions.add(i, new Partition(i + folds + 2))
 	trainWritePartitions.add(i, new Partition(i + 2*folds + 2))
 	testWritePartitions.add(i, new Partition(i + 3*folds + 2))
+	trainPriorPartitions.add(i, new Partition(i + 4*folds + 2))
+	testPriorPartitions.add(i, new Partition(i + 5*folds + 2))
 }
 
 List<Set<GroundingWrapper>> groundings = FoldUtils.splitGroundings(data, [trusts, knows], [fullTrusts, fullKnows], folds)
@@ -139,9 +147,10 @@ for (int i = 0; i < folds; i++) {
 }
 
 
-Map<String, List<DiscretePredictionStatistics>> results = new HashMap<String, List<DiscretePredictionStatistics>>()
+
+Map<String, List<Double []>> results = new HashMap<String, List<Double []>>()
 for (String method : methods)
-	results.put(method, new ArrayList<DiscretePredictionStatistics>())
+	results.put(method, new ArrayList<Double []>())
 
 for (int fold = 0; fold < folds; fold++) {
 
@@ -173,12 +182,36 @@ for (int fold = 0; fold < folds; fold++) {
 			trainReadPartitions.add(trustsPartitions.get(i))
 	}
 
+	trainReadPartitions.add(trainPriorPartitions.get(fold))
+	testReadPartitions.add(testPriorPartitions.get(fold))
+	
 	Partition testLabelPartition = trustsPartitions.get(fold)
 
-	// open databases
-	Database trainDB = data.getDatabase(trainWritePartitions.get(fold), (Partition []) trainReadPartitions.toArray())
-	Database testDB = data.getDatabase(testWritePartitions.get(fold), (Partition []) testReadPartitions.toArray())
 
+	// training
+	Database trainDB = data.getDatabase(trainWritePartitions.get(fold), (Partition []) trainReadPartitions.toArray())
+	Set<GroundAtom> allTrusts = Queries.getAllAtoms(trainDB, trusts)
+	double sum = 0.0;
+	for (GroundAtom atom : allTrusts)
+		sum += atom.getValue()
+	trainDB.close()
+	data.getInserter(prior, trainPriorPartitions.get(fold)).insertValue(sum / allTrusts.size(), constant)
+	log.info("Computed training prior for fold {} of {}", fold, sum / allTrusts.size())
+	
+	// testing
+	Database testDB = data.getDatabase(testWritePartitions.get(fold), (Partition []) testReadPartitions.toArray())
+	allTrusts = Queries.getAllAtoms(testDB, trusts)
+	sum = 0.0;	
+	for (GroundAtom atom : allTrusts)
+		sum += atom.getValue()
+	testDB.close()
+	data.getInserter(prior, testPriorPartitions.get(fold)).insertValue(sum / allTrusts.size(), constant)
+	log.info("Computed testing prior for fold {} of {}", fold, sum / allTrusts.size())
+	
+	// reopen databases
+	trainDB = data.getDatabase(trainWritePartitions.get(fold), (Partition []) trainReadPartitions.toArray())
+	testDB = data.getDatabase(testWritePartitions.get(fold), (Partition []) testReadPartitions.toArray())
+	
 
 	/*
 	 * POPULATE TRAINING DATABASE
@@ -209,7 +242,10 @@ for (int fold = 0; fold < folds; fold++) {
 		}
 	}
 
+	testDB.close()
+
 	Partition dummy = new Partition(99999)
+	Partition dummy2 = new Partition(19999)
 	Database labelsDB = data.getDatabase(dummy, [trusts] as Set, trainLabelPartition)
 
 	// get all default weights
@@ -231,39 +267,46 @@ for (int fold = 0; fold < folds; fold++) {
 		/*
 		 * Inference on test set
 		 */
+		testDB = data.getDatabase(testWritePartitions.get(fold), (Partition []) testReadPartitions.toArray())
 		MPEInference mpe = new MPEInference(m, testDB, epinionsBundle)
 		FullInferenceResult result = mpe.mpeInference()
-		System.out.println("Objective: " + result.getTotalWeightedIncompatibility())
+		testDB.close()
 
 		/*
 		 * Evaluation
-		 * TODO: implement area under PR curve
+		 * implement area under PR curve
 		 */
-		def comparator = new DiscretePredictionComparator(testDB)
+		Database resultsDB = data.getDatabase(dummy2, testWritePartitions.get(fold))
+		def comparator = new SimpleRankingComparator(resultsDB)
 		def groundTruthDB = data.getDatabase(testLabelPartition, [trusts] as Set)
 		comparator.setBaseline(groundTruthDB)
-		comparator.setThreshold(0.5)
+		
+		
+		def metrics = [RankingScore.AUPRC, RankingScore.NegAUPRC, RankingScore.AreaROC]
+		double [] score = new double[metrics.size()]
+		
+		for (int i = 0; i < metrics.size(); i++) {
+			comparator.setRankingScore(metrics.get(i))
+			score[i] = comparator.compare(trusts)
+		}
+		System.out.println("Area under positive-class PR curve: " + score[0])
+		System.out.println("Area under negative-class PR curve: " + score[1])
+		System.out.println("Area under ROC curve: " + score[2])
 
-		//System.out.println("totalTestExamples " + totalTestExamples)
-		DiscretePredictionStatistics stats = comparator.compare(trusts)
-		System.out.println("F1 score " + stats.getF1(
-				DiscretePredictionStatistics.BinaryClass.NEGATIVE))
-
-		results.get(method).add(fold, stats)
-
+		results.get(method).add(fold, score)
+		resultsDB.close()
 		groundTruthDB.close()
 	}
 	trainDB.close()
+	labelsDB.close()
 }
 
 for (String method : methods) {
 	def methodStats = results.get(method)
 	for (int fold = 0; fold < folds; fold++) {
-		def stats = methodStats.get(fold)
-		def b = DiscretePredictionStatistics.BinaryClass.POSITIVE
-		System.out.println("Method " + method + ", fold " + fold +", acc " + stats.getAccuracy() +
-				", prec " + stats.getPrecision(b) + ", rec " + stats.getRecall(b) +
-				", F1 " + stats.getF1(b))
+		def score = methodStats.get(fold)
+		System.out.println("Method " + method + ", fold " + fold +", auprc positive: " 
+			+ score[0] + ", negative: " + score[1] + ", auROC: " + score[2])
 	}
 }
 
