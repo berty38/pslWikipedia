@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Random;
 import java.util.Scanner;
 import java.util.Set;
 
@@ -25,19 +26,17 @@ import edu.umd.cs.psl.database.loading.Inserter;
 public class NaiveBayesUtil {
 
 	private Logger log;
-	private Map<Integer, Map<Integer, Double>> wordProbs;
-	private Map<Integer, Double> labelPriors;
-	private Map<Integer, Double> classConstants;
 	private Set<Integer> allWords;
+	private CounterMap<Integer> catDocTotals;
+	private CounterMap<Integer> catWordTotals;
+	private Map<Integer, CounterMap<Integer>> catWordCounts;
+	
 
 	private final int prior = 1;
 	private final int catPrior = 1;
 
 	public NaiveBayesUtil() {
 		log = LoggerFactory.getLogger("NaiveBayesUtility");
-		labelPriors = new HashMap<Integer, Double>();
-		classConstants = new HashMap<Integer, Double>();
-		wordProbs = new HashMap<Integer, Map<Integer, Double>>();
 		allWords = new HashSet<Integer>();
 	}
 
@@ -50,7 +49,8 @@ public class NaiveBayesUtil {
 		try {
 			Scanner catScanner = new Scanner(new FileReader(categoryFile));
 
-			CounterMap<Integer> catTotals = new CounterMap<Integer>();
+			catDocTotals = new CounterMap<Integer>();
+			catWordTotals = new CounterMap<Integer>();
 
 			Map<Integer, Integer> categories = new HashMap<Integer, Integer>();
 
@@ -66,21 +66,18 @@ public class NaiveBayesUtil {
 					if (trainingKeys.contains(docID)) {
 						categories.put(docID, label);
 
-						catTotals.increment(label);
+						catDocTotals.increment(label);
 						documentCount++;
 					}
 				}
 			}
 			catScanner.close();
 
-			// initialize category counter
-			Map<Integer, CounterMap<Integer>> catCounts = new HashMap<Integer, CounterMap<Integer>>();
-			for (Integer cat : catTotals.keySet())  {
-				labelPriors.put(cat, Math.log(catTotals.get(cat) + catPrior) - Math.log(documentCount)); 
-				catCounts.put(cat, new CounterMap<Integer>());
+			// initialize category word counter
+			catWordCounts = new HashMap<Integer, CounterMap<Integer>>();
+			for (Integer cat : catDocTotals.keySet())  {
+				catWordCounts.put(cat, new CounterMap<Integer>());
 			}
-
-			log.debug("Label priors: " + labelPriors);
 
 			// load words
 			log.debug("Starting word counts");
@@ -93,36 +90,14 @@ public class NaiveBayesUtil {
 				for (Integer wordID : docWords) {
 					if (trainingKeys.contains(docID)) {
 						Integer cat = categories.get(docID);
-						catCounts.get(cat).increment(wordID);
+						catWordCounts.get(cat).increment(wordID);
+						catWordTotals.increment(cat);
 						//log.debug("Document {} in category {} had word " + wordID, docID, cat);
 					}
 					allWords.add(wordID);
 				}
 			}
 			wordScanner.close();
-
-			// convert counts to log likelihoods
-			log.debug("Computing log-likelihoods from counts");
-			for (Integer cat : catTotals.keySet()) {
-				HashMap<Integer, Double> probs = new HashMap<Integer, Double>();
-				double classConstant = 0.0;
-				for (Integer word : allWords) {
-					int count = catCounts.get(cat).get(word);
-					double denominator = Math.log(2*prior + catTotals.get(cat)); 
-					double logp = Math.log(prior + count) - 
-							Math.log(prior + catTotals.get(cat) - count);
-					classConstant += Math.log(prior + catTotals.get(cat) - count) - denominator;
-					probs.put(word, logp);
-					
-					//log.debug("Word " + word + " appeared in " + count + " documents of cat " + cat + ", which had " + catTotals.get(cat) + " total docs");
-					//log.debug("Estimated p(word | cat) {}", (double) (prior + count) / (double) (prior + catTotals.get(cat)));
-				}
-				wordProbs.put(cat, probs);
-
-				classConstants.put(cat, classConstant);
-
-				catCounts.get(cat).clear();
-			}
 
 			log.debug("Finished word counts");
 
@@ -143,7 +118,7 @@ public class NaiveBayesUtil {
 						Map<Integer, Double> prediction = predict(docWords);
 						Integer pred = -1;
 						//log.debug(prediction.toString());
-						for (Integer c : catCounts.keySet())
+						for (Integer c : catWordCounts.keySet())
 							if (pred == -1 || prediction.get(c) > prediction.get(pred))
 								pred = c;
 						//log.debug("Predicted {}, true {}", pred, cat);
@@ -157,11 +132,6 @@ public class NaiveBayesUtil {
 				log.debug("Naive Bayes training accuracy: {}", (double) correct / (double) total);
 			}
 
-
-
-
-			catCounts.clear();
-			catTotals.clear();
 			categories.clear();
 		} catch (IOException e) {
 			log.error(e.toString());
@@ -203,15 +173,14 @@ public class NaiveBayesUtil {
 	 */
 	public Map<Integer, Double> predict(Set<Integer> docWords) {
 		Map<Integer, Double> scores = new HashMap<Integer, Double>();
-		for (Integer cat : labelPriors.keySet()) {
-			// TODO: zeroed out label priors
-			double score = 0*labelPriors.get(cat) + classConstants.get(cat);
-			Map<Integer, Double> probs = wordProbs.get(cat);
+		for (Integer cat : catDocTotals.keySet()) {
+			double score = Math.log(catDocTotals.get(cat) + catPrior);
+			CounterMap<Integer> counts = catWordCounts.get(cat);
 			for (Integer word : docWords)
 				if (allWords.contains(word))
-					score += probs.get(word);
+					score += Math.log(counts.get(word) + prior) - Math.log(catWordTotals.get(cat) + allWords.size()*prior);
 
-			//log.trace("Document scores " + score + " for label " + cat);
+			//log.debug("Document scores " + score + " for label " + cat);
 			scores.put(cat, score);
 		}
 		convertToProbability(scores);
@@ -279,6 +248,7 @@ public class NaiveBayesUtil {
 		try {
 			log.debug("Loading file for Naive Bayes prediction");
 			Scanner wordScanner = new Scanner(new FileReader(wordFile));
+			int count = 0;
 			while (wordScanner.hasNext()) {
 				String line = wordScanner.nextLine();
 				String [] tokens = line.split("\t");
@@ -292,10 +262,11 @@ public class NaiveBayesUtil {
 						inserter.insertValue(e.getValue(), docID, e.getKey());
 						log.trace("NB predicts p={} for {}", e.getValue(), e.getKey());
 					}
+					count++;
 				}
 			}
 			wordScanner.close();
-			log.trace("Finished prediction on full file");
+			log.debug("Finished prediction on full file. Inserted {} documents", count);
 		} catch (IOException e) {
 			log.error(e.toString());
 		}
@@ -329,72 +300,6 @@ public class NaiveBayesUtil {
 		} catch (IOException e) {
 			log.error(e.toString());
 		}
-	}
-
-
-	/**
-	 * detaches all data structures
-	 */
-	public void close() {
-		for (Integer key : labelPriors.keySet()) {
-			wordProbs.get(key).clear();
-		}
-		wordProbs.clear();
-		labelPriors.clear();
-		allWords.clear();
-	}
-
-	/**
-	 * small test function
-	 * @param args
-	 */
-	public static void main(String [] args) {
-		String documents = "data/pruned-document.txt";
-		String labels = "data/newCategoryBelonging.txt";
-
-		NaiveBayesUtil nb = new NaiveBayesUtil();
-
-		HashSet<Integer> trainingKeys = new HashSet<Integer>();
-		for (int i = 0; i <= 3000; i++) {
-			trainingKeys.add(i);
-		}
-
-		nb.learn(trainingKeys, labels, documents);
-
-		Map<Integer, Map<Integer, Double>> allPredictions = nb.predictAll(documents, trainingKeys);
-
-		try {
-			Scanner catScanner = new Scanner(new FileReader(labels));
-
-			Map<Integer, Integer> categories = new HashMap<Integer, Integer>();
-
-			while (catScanner.hasNext()) {
-				String line = catScanner.nextLine();
-				String [] tokens = line.split("\t");
-				if (tokens.length == 2) {
-					Integer docID = Integer.decode(tokens[0]);
-					Integer label = Integer.decode(tokens[1]);
-
-					categories.put(docID, label);
-				}
-			}
-			catScanner.close();
-
-			double avg = 0;
-
-			for (Integer i : allPredictions.keySet()) {
-				System.out.println("Document " + i + ", true " + categories.get(i) + 
-						", predicted " + allPredictions.get(i).get(categories.get(i)));
-				avg += allPredictions.get(i).get(categories.get(i));
-			}
-			System.out.println("Avg probability of correct label " + avg / (double) allPredictions.keySet().size());
-			System.out.println("Baseline " + 1.0 / 19.0);
-
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-
-		nb.close();
 	}
 
 	

@@ -106,6 +106,11 @@ UniqueID constant = data.getUniqueID(0)
 m.add rule: (knows(A,B) & prior(constant)) >> trusts(A,B), weight: 1.0, squared: sq
 m.add rule: (knows(A,B) & trusts(A,B)) >> prior(constant), weight: 1.0, squared: sq
 
+// save all default weights
+Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
+for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
+	weights.put(k, k.getWeight());
+
 Partition fullKnows =  new Partition(0)
 Partition fullTrusts = new Partition(1)
 
@@ -247,11 +252,6 @@ for (int fold = 0; fold < folds; fold++) {
 	Partition dummy = new Partition(99999)
 	Partition dummy2 = new Partition(19999)
 	Database labelsDB = data.getDatabase(dummy, [trusts] as Set, trainLabelPartition)
-
-	// get all default weights
-	Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
-	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-		weights.put(k, k.getWeight());
 
 	for (String method : methods) {
 		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))

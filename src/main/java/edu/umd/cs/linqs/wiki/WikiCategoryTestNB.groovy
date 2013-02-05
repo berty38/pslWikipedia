@@ -30,6 +30,8 @@ import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver.Type
 import edu.umd.cs.psl.evaluation.result.*
 import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionComparator
 import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionStatistics
+import edu.umd.cs.psl.evaluation.statistics.RankingScore
+import edu.umd.cs.psl.evaluation.statistics.SimpleRankingComparator
 import edu.umd.cs.psl.evaluation.statistics.filter.MaxValueFilter
 import edu.umd.cs.psl.groovy.*
 import edu.umd.cs.psl.model.Model;
@@ -50,7 +52,15 @@ import com.google.common.collect.Iterables;
 //methods = ["RandOM", "MM1", "MM10", "MM100", "MM1000", "MLE"]
 //methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
 //methods = ["None"]
-methods = ["MPLE", "NONE", "MLE", "MM1", "MM10"]
+//methods = ["MPLE", "NONE", "MLE", "MM1", "MM10"]
+methods = ["MM10"]
+
+wordFile = "uniqueDocument.txt"
+labelFile = "uniqueLabels.txt"
+linkFile = "uniqueLinks.txt"
+//linkFile = "perfectLinks.txt"
+talkFile = "uniqueTalk.txt"
+sq = false
 
 Logger log = LoggerFactory.getLogger(this.class)
 
@@ -72,16 +82,16 @@ m.add predicate: "Link", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "Talk", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 
 //prior
-m.add rule : ~(HasCat(A,N)), weight: 1.0
+//m.add rule : ~(HasCat(A,N)), weight: 1.0, squared: sq
 
-m.add rule : ( ClassifyCat(A,N) ) >> HasCat(A,N),  weight : 1.0
-m.add rule : ( HasCat(B,C) & Link(A,B) & (A - B)) >> HasCat(A,C), weight: 1.0
-m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) ) >> HasCat(D,C), weight: 1.0
+m.add rule : ( ClassifyCat(A,N) ) >> HasCat(A,N),  weight : 1.0, squared: sq
+m.add rule : ( HasCat(B,C) & Link(A,B) & (A - B)) >> HasCat(A,C), weight: 1.0, squared: sq
+//m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) ) >> HasCat(D,C), weight: 1.0, squared: sq
 for (int i = 1; i < 20; i++)  {
 	UniqueID cat = data.getUniqueID(i)
-	m.add rule : ( ClassifyCat(A,cat) ) >> HasCat(A,cat),  weight : 1.0
-	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 1.0
-	m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0
+//	m.add rule : ( ClassifyCat(A,cat) ) >> HasCat(A,cat),  weight : 1.0, squared: sq
+//	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 1.0, squared: sq
+//	m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0, squared: sq
 }
 
 m.add PredicateConstraint.Functional , on : HasCat
@@ -100,11 +110,11 @@ Partition groundTruth = new Partition(1)
 def dataPath = "./data/"
 def inserter
 inserter = data.getInserter(Link, fullObserved)
-InserterUtils.loadDelimitedData(inserter, dataPath + "uniqueLinks.txt")
+InserterUtils.loadDelimitedData(inserter, dataPath + linkFile)
 inserter = data.getInserter(Talk, fullObserved)
-InserterUtils.loadDelimitedData(inserter, dataPath + "talk.txt")
+InserterUtils.loadDelimitedData(inserter, dataPath + talkFile)
 inserter = data.getInserter(HasCat, groundTruth)
-InserterUtils.loadDelimitedData(inserter, dataPath + "newCategoryBelonging.txt")
+InserterUtils.loadDelimitedData(inserter, dataPath + labelFile)
 
 // number of folds
 folds = 1
@@ -112,6 +122,9 @@ folds = 1
 trainTestRatio = 0.5
 // ratio of documents to keep (throw away the rest)
 filterRatio = 1.0
+// target size of snowball sampler
+targetSize = 3000
+explore = 0.001 // prob of random node in snowball sampler
 trainReadPartitions = new ArrayList<Partition>()
 testReadPartitions = new ArrayList<Partition>()
 trainWritePartitions = new ArrayList<Partition>()
@@ -133,7 +146,7 @@ Variable document = new Variable("Document")
 Variable linkedDocument = new Variable("LinkedDoc")
 keys.add(document)
 keys.add(linkedDocument)
-queries.add(new DatabaseQuery(ClassifyCat(document,N).getFormula()))
+//queries.add(new DatabaseQuery(ClassifyCat(document,N).getFormula()))
 queries.add(new DatabaseQuery(Link(document, linkedDocument).getFormula()))
 queries.add(new DatabaseQuery(Talk(document, A).getFormula()))
 queries.add(new DatabaseQuery(HasCat(document, A).getFormula()))
@@ -141,7 +154,7 @@ queries.add(new DatabaseQuery(HasCat(document, A).getFormula()))
 def partitionDocuments = new HashMap<Partition, Set<GroundTerm>>()
 
 Random rand = new Random(0)
-double trainingObservedRatio = 0.3
+double trainingObservedRatio = 0.15
 
 for (int i = 0; i < folds; i++) {
 	trainReadPartitions.add(i, new Partition(i + 2))
@@ -157,6 +170,13 @@ for (int i = 0; i < folds; i++) {
 			fullObserved, groundTruth, trainReadPartitions.get(i),
 			testReadPartitions.get(i), trainLabelPartitions.get(i), 
 			testLabelPartitions.get(i), queries, keys, filterRatio)
+//	Set<GroundTerm> [] documents = FoldUtils.generateSnowballSplit(data, fullObserved, groundTruth, 
+//		trainReadPartitions.get(i), testReadPartitions.get(i), trainLabelPartitions.get(i), 
+//		testLabelPartitions.get(i), queries, keys, targetSize, Link, explore)
+	
+	
+	
+	
 	partitionDocuments.put(trainReadPartitions.get(i), documents[0])
 	partitionDocuments.put(testReadPartitions.get(i), documents[1])
 
@@ -185,16 +205,18 @@ for (int fold = 0; fold < folds; fold++) {
 	// do Naive Bayes training
 	NaiveBayesUtil nb = new NaiveBayesUtil()
 
-	log.debug("training set unique IDS: " + nbTrainingKeys)
-	nb.learn(nbTrainingKeys.get(fold), dataPath + "newCategoryBelonging.txt", dataPath + "pruned-document.txt")
+	log.debug("Fold {} Naive Bayes training set has {} documents", fold, nbTrainingKeys.get(fold).size())
+	nb.learn(nbTrainingKeys.get(fold), dataPath + labelFile, dataPath + wordFile)
 
 	inserter = data.getInserter(ClassifyCat, trainReadPartitions.get(fold))
-	nb.insertAllPredictions(dataPath + "pruned-document.txt", trainingKeys.get(fold), inserter)
-	//nb.insertAllProbabilities(dataPath + "pruned-document.txt", trainingKeys.get(fold), inserter)
+	//nb.insertAllPredictions(dataPath + wordFile, trainingKeys.get(fold), inserter)
+	nb.insertAllProbabilities(dataPath + wordFile, trainingKeys.get(fold), inserter)
+	log.debug("training keys size {}", trainingKeys.get(fold).size())
 	
 	inserter = data.getInserter(ClassifyCat, testReadPartitions.get(fold))
-	nb.insertAllPredictions(dataPath + "pruned-document.txt", testingKeys.get(fold), inserter)
-	//nb.insertAllProbabilities(dataPath + "pruned-document.txt", testingKeys.get(fold), inserter)
+	//nb.insertAllPredictions(dataPath + wordFile, testingKeys.get(fold), inserter)
+	nb.insertAllProbabilities(dataPath + wordFile, testingKeys.get(fold), inserter)
+	log.debug("testing keys size {}", testingKeys.get(fold).size())
 	
 
 	Database trainDB = data.getDatabase(trainWritePartitions.get(fold), trainReadPartitions.get(fold))
@@ -265,7 +287,7 @@ for (int fold = 0; fold < folds; fold++) {
 		def groundTruthDB = data.getDatabase(testLabelPartitions.get(fold), [HasCat] as Set)
 		comparator.setBaseline(groundTruthDB)
 		comparator.setResultFilter(new MaxValueFilter(HasCat, 1))
-		comparator.setThreshold(Double.MIN_VALUE) // treat best nonzero value as true
+		comparator.setThreshold(Double.MIN_VALUE) // treat best value as true as long as it is nonzero
 
 		int totalTestExamples = testingKeys.get(fold).size() * numCategories;
 		//System.out.println("totalTestExamples " + totalTestExamples)
@@ -274,7 +296,7 @@ for (int fold = 0; fold < folds; fold++) {
 				DiscretePredictionStatistics.BinaryClass.POSITIVE))
 
 		results.get(method).add(fold, stats)
-
+	
 		groundTruthDB.close()
 	}
 	trainDB.close()
@@ -287,7 +309,8 @@ for (String method : methods) {
 		def b = DiscretePredictionStatistics.BinaryClass.POSITIVE
 		System.out.println("Method " + method + ", fold " + fold +", acc " + stats.getAccuracy() +
 				", prec " + stats.getPrecision(b) + ", rec " + stats.getRecall(b) +
-				", F1 " + stats.getF1(b))
+				", F1 " + stats.getF1(b) + ", correct " + stats.getCorrectAtoms().size() + 
+			", tp " + stats.tp + ", fp " + stats.fp + ", tn " + stats.tn + ", fn " + stats.fn)
 	}
 }
 

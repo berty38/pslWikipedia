@@ -84,7 +84,7 @@ imagesc(Kb(inds, inds));
 %%
 
 
-IJ = load('uniqueLinks.txt');
+IJ = load('uniqueLinks.txt')-20000;
 
 sameClass = 0;
 
@@ -97,6 +97,21 @@ end
 Au = sparse(IJ(:,1)+1, IJ(:,2)+1, ones(length(IJ), 1));
 figure(3);
 imagesc(Au(inds, inds));
+%%
+IJ = load('perfectLinks.txt')-20000;
+
+sameClass = 0;
+
+for k = 1:length(IJ)
+    if Y(IJ(k,1)+1) == Y(IJ(k,2)+1)
+        sameClass = sameClass + 1;
+    end
+end
+
+Au = sparse(IJ(:,1)+1, IJ(:,2)+1, ones(length(IJ), 1));
+figure(4);
+imagesc(Au(inds, inds));
+
 
 % %%
 % IJ = load('WithinWithinLinks.txt');
