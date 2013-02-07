@@ -99,7 +99,7 @@ for (String method : methods) {
 					newBundle.addProperty(MaxMargin.BALANCE_LOSS_KEY, lossBalancing);
 					newBundle.addProperty(MaxMargin.SCALE_NORM_KEY, normScaling);
 					methodConfigs.put(((sq) ? "quad" : "linear") + "-mm-" + slackPenalty + "-" + lossBalancing.name().toLowerCase()
-						+ "-" + normScaling.name().toLowerCase(), newBundle);
+							+ "-" + normScaling.name().toLowerCase(), newBundle);
 				}
 			}
 		}
@@ -114,7 +114,7 @@ for (String method : methods) {
 		newBundle.addProperty(MetropolisRandOM.BURN_IN_KEY, burnIn);
 		newBundle.addProperty(MetropolisRandOM.MAX_ITER_KEY, maxIter);
 		methodConfigs.put(((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + numSamples + "-" + burnIn
-			+ "-" + maxIter, newBundle);
+				+ "-" + maxIter, newBundle);
 	}
 	else
 		throw new IllegalArgumentException("Unrecognized method: " + method);
@@ -254,7 +254,7 @@ for (int fold = 0; fold < folds; fold++) {
 
 	trainReadPartitions.add(trainPriorPartitions.get(fold))
 	testReadPartitions.add(testPriorPartitions.get(fold))
-	
+
 	Partition testLabelPartition = trustsPartitions.get(fold)
 
 
@@ -267,21 +267,21 @@ for (int fold = 0; fold < folds; fold++) {
 	trainDB.close()
 	data.getInserter(prior, trainPriorPartitions.get(fold)).insertValue(sum / allTrusts.size(), constant)
 	log.info("Computed training prior for fold {} of {}", fold, sum / allTrusts.size())
-	
+
 	// testing
 	Database testDB = data.getDatabase(testWritePartitions.get(fold), (Partition []) testReadPartitions.toArray())
 	allTrusts = Queries.getAllAtoms(testDB, trusts)
-	sum = 0.0;	
+	sum = 0.0;
 	for (GroundAtom atom : allTrusts)
 		sum += atom.getValue()
 	testDB.close()
 	data.getInserter(prior, testPriorPartitions.get(fold)).insertValue(sum / allTrusts.size(), constant)
 	log.info("Computed testing prior for fold {} of {}", fold, sum / allTrusts.size())
-	
+
 	// reopen databases
 	trainDB = data.getDatabase(trainWritePartitions.get(fold), (Partition []) trainReadPartitions.toArray())
 	testDB = data.getDatabase(testWritePartitions.get(fold), (Partition []) testReadPartitions.toArray())
-	
+
 
 	/*
 	 * POPULATE TRAINING DATABASE
@@ -333,6 +333,13 @@ for (int fold = 0; fold < folds; fold++) {
 		 * Inference on test set
 		 */
 		testDB = data.getDatabase(testWritePartitions.get(fold), (Partition []) testReadPartitions.toArray())
+		for (int i = 0; i < allGroundings.size(); i++) {
+			GroundTerm [] grounding = allGroundings.get(i)
+			GroundAtom atom = testDB.getAtom(trusts, grounding)
+			if (atom instanceof RandomVariableAtom) {
+				atom.setValue(0.0)
+			}
+		}
 		MPEInference mpe = new MPEInference(m, testDB, baseConfig)
 		FullInferenceResult result = mpe.mpeInference()
 		testDB.close()
@@ -345,11 +352,11 @@ for (int fold = 0; fold < folds; fold++) {
 		def comparator = new SimpleRankingComparator(resultsDB)
 		def groundTruthDB = data.getDatabase(testLabelPartition, [trusts] as Set)
 		comparator.setBaseline(groundTruthDB)
-		
-		
+
+
 		def metrics = [RankingScore.AUPRC, RankingScore.NegAUPRC, RankingScore.AreaROC]
 		double [] score = new double[metrics.size()]
-		
+
 		for (int i = 0; i < metrics.size(); i++) {
 			comparator.setRankingScore(metrics.get(i))
 			score[i] = comparator.compare(trusts)
@@ -376,24 +383,24 @@ for (String method : methodConfigs.keySet()) {
 			sum[i] += score[i];
 			sumSq[i] += score[i] * score[i];
 		}
-		System.out.println("Method " + method + ", fold " + fold +", auprc positive: " 
-			+ score[0] + ", negative: " + score[1] + ", auROC: " + score[2])
+		System.out.println("Method " + method + ", fold " + fold +", auprc positive: "
+				+ score[0] + ", negative: " + score[1] + ", auROC: " + score[2])
 	}
-	
+
 	mean = new double[3];
 	variance = new double[3];
 	for (int i = 0; i < 3; i++) {
 		mean[i] = sum[0] / folds;
 		variance[i] = sumSq[i] / folds - mean[i] * mean[i];
 	}
-	
+
 	System.out.println();
 	System.out.println("Method " + method + ", auprc positive: (mean/variance) "
-		+ mean[0] + "  /  " + variance[0] );
+			+ mean[0] + "  /  " + variance[0] );
 	System.out.println("Method " + method + ", auprc negative: (mean/variance) "
-		+ mean[1] + "  /  " + variance[1] );
+			+ mean[1] + "  /  " + variance[1] );
 	System.out.println("Method " + method + ", auROC: (mean/variance) "
-		+ mean[2] + "  /  " + variance[2] );
+			+ mean[2] + "  /  " + variance[2] );
 	System.out.println();
 }
 
