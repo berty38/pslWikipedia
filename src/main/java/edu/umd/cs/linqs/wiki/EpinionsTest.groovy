@@ -1,74 +1,138 @@
 package edu.umd.cs.linqs.wiki
 
-import java.util.Set;
-
-import junit.framework.TestResult;
-
-import org.eclipse.jdt.internal.core.util.LRUCache.Stats;
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import edu.emory.mathcs.utils.ConcurrencyUtils
+import com.google.common.collect.Iterables
+
 import edu.umd.cs.psl.application.inference.MPEInference
 import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxLikelihoodMPE
-import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin
 import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxPseudoLikelihood
+import edu.umd.cs.psl.application.learning.weight.maxlikelihood.VotedPerceptron;
+import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin
+import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin.LossBalancingType
+import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin.NormScalingType;
 import edu.umd.cs.psl.application.learning.weight.random.FirstOrderMetropolisRandOM
 import edu.umd.cs.psl.application.learning.weight.random.HardEMRandOM
+import edu.umd.cs.psl.application.learning.weight.random.IncompatibilityMetropolisRandOM;
+import edu.umd.cs.psl.application.learning.weight.random.MetropolisRandOM;
 import edu.umd.cs.psl.config.*
 import edu.umd.cs.psl.core.*
 import edu.umd.cs.psl.core.inference.*
 import edu.umd.cs.psl.database.DataStore
 import edu.umd.cs.psl.database.Database
-import edu.umd.cs.psl.database.DatabasePopulator
-import edu.umd.cs.psl.database.DatabaseQuery
 import edu.umd.cs.psl.database.Partition
 import edu.umd.cs.psl.database.ResultList
 import edu.umd.cs.psl.database.rdbms.RDBMSDataStore
 import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver
 import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver.Type
 import edu.umd.cs.psl.evaluation.result.*
-import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionComparator
-import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionStatistics
 import edu.umd.cs.psl.evaluation.statistics.RankingScore
 import edu.umd.cs.psl.evaluation.statistics.SimpleRankingComparator
-import edu.umd.cs.psl.evaluation.statistics.filter.MaxValueFilter
 import edu.umd.cs.psl.groovy.*
-import edu.umd.cs.psl.model.Model;
+import edu.umd.cs.psl.model.Model
 import edu.umd.cs.psl.model.argument.ArgumentType
 import edu.umd.cs.psl.model.argument.GroundTerm
 import edu.umd.cs.psl.model.argument.UniqueID
-import edu.umd.cs.psl.model.argument.Variable
 import edu.umd.cs.psl.model.atom.GroundAtom
-import edu.umd.cs.psl.model.atom.QueryAtom
-import edu.umd.cs.psl.model.atom.RandomVariableAtom;
-import edu.umd.cs.psl.model.function.AttributeSimilarityFunction
+import edu.umd.cs.psl.model.atom.RandomVariableAtom
+import edu.umd.cs.psl.model.kernel.CompatibilityKernel
+import edu.umd.cs.psl.model.parameters.Weight
 import edu.umd.cs.psl.ui.loading.*
 import edu.umd.cs.psl.util.database.Queries
-import edu.umd.cs.psl.model.kernel.CompatibilityKernel;
-import edu.umd.cs.psl.model.parameters.PositiveWeight;
-import edu.umd.cs.psl.model.parameters.Weight
-import edu.umd.cs.psl.model.predicate.Predicate
 
-import com.google.common.collect.Iterables;
 
-//methods = ["RandOM", "MM1", "MM10", "MM100", "MM1000", "MLE"]
-//methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
-//methods = ["NONE", "MLE", "MPLE", "MM1", "MM10"]
-//methods = ["MLE"]
-//methods = ["None"]
-methods = ["MM1", "MLE"];
+/*
+ * SET LEARNING ALGORITHMS
+ * 
+ * Options:
+ * "MLE" (MaxLikelihoodMPE)
+ * "MPLE" (MaxPseudoLikelihood)
+ * "MM" (MaxMargin)
+ * "FirstOrderRandOM" (FirstOrderMetropolisRandOM)
+ * "IncompatibilityRandOM" (IncompatibilityMetropolisRandOM)
+ */
+methods = ["FirstOrderRandOM", "IncompatibilityRandOM"];
 
-"quad-mm-1-class_weights-none"
+/* MLE/MPLE options */
+vpStepCounts = [100]
+vpStepSizes = [10]
+
+/* MM options */
+slackPenalties = [1, 10, 100]
+lossBalancings = [LossBalancingType.NONE, LossBalancingType.CLASS_WEIGHTS, LossBalancingType.INVERSE_CLASS_WEIGHTS]
+normScalings = [NormScalingType.NONE, NormScalingType.NUM_GROUNDINGS, NormScalingType.INVERSE_NUM_GROUNDINGS]
+
+/* Metropolis RandOM options */
+// TODO
 
 Logger log = LoggerFactory.getLogger(this.class)
 
 ConfigManager cm = ConfigManager.getManager()
-ConfigBundle epinionsBundle = cm.getBundle("epinions")
+ConfigBundle baseConfig = cm.getBundle("epinions")
 
-def defaultPath = System.getProperty("java.io.tmpdir") + "/"
-String dbpath = epinionsBundle.getString("dbpath", defaultPath + "pslEpinions")
-DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), epinionsBundle)
+boolean sq = false
+
+/*
+ * DEFINES EXPERIMENT CONFIGURATIONS
+ */
+Map<String, ConfigBundle> methodConfigs = new HashMap<String, ConfigBundle>();
+for (String method : methods) {
+	if (method.equals("MLE") || method.equals("MPLE")) {
+		for (int vpStepCount : vpStepCounts) {
+			for (double vpStepSize : vpStepSizes) {
+				ConfigBundle newBundle = cm.getBundle("epinions");
+				newBundle.addProperty("method", method);
+				newBundle.addProperty(VotedPerceptron.NUM_STEPS_KEY, vpStepCount);
+				newBundle.addProperty(VotedPerceptron.STEP_SIZE_KEY, vpStepSize);
+				methodConfigs.put(((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + vpStepCount + "-" + vpStepSize, newBundle);
+			}
+		}
+	}
+	else if (method.equals("MM")) {
+		for (double slackPenalty : slackPenalties) {
+			for (LossBalancingType lossBalancing : lossBalancings) {
+				for (NormScalingType normScaling : normScalings) {
+					ConfigBundle newBundle = cm.getBundle("epinions");
+					newBundle.addProperty("method", method);
+					newBundle.addProperty(MaxMargin.SLACK_PENALTY_KEY, slackPenalty);
+					newBundle.addProperty(MaxMargin.BALANCE_LOSS_KEY, lossBalancing);
+					newBundle.addProperty(MaxMargin.SCALE_NORM_KEY, normScaling);
+					methodConfigs.put(((sq) ? "quad" : "linear") + "-mm-" + slackPenalty + "-" + lossBalancing.name().toLowerCase()
+						+ "-" + normScaling.name().toLowerCase(), newBundle);
+				}
+			}
+		}
+	}
+	else if (method.equals("FirstOrderRandOM") || method.equals("IncompatibilityRandOM")) {
+		ConfigBundle newBundle = cm.getBundle("epinions");
+		newBundle.addProperty("method", method);
+		numSamples = 75
+		burnIn = 20
+		maxIter = 30;
+		newBundle.addProperty(MetropolisRandOM.NUM_SAMPLES_KEY, numSamples);
+		newBundle.addProperty(MetropolisRandOM.BURN_IN_KEY, burnIn);
+		newBundle.addProperty(MetropolisRandOM.MAX_ITER_KEY, maxIter);
+		methodConfigs.put(((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + numSamples + "-" + burnIn
+			+ "-" + maxIter, newBundle);
+	}
+	else
+		throw new IllegalArgumentException("Unrecognized method: " + method);
+}
+
+/*
+ * PRINTS EXPERIMENT CONFIGURATIONS
+ */
+for (Map.Entry<String, ConfigBundle> config : methodConfigs.entrySet())
+	System.out.println("Config for " + config.getKey() + "\n" + config.getValue());
+
+/*
+ * INITIALIZES DATASTORE AND MODEL
+ */
+//def defaultPath = System.getProperty("java.io.tmpdir") + "/"
+def defaultPath = "/scratch0/bach-icml13/"
+String dbpath = baseConfig.getString("dbpath", defaultPath + "pslEpinions")
+DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), baseConfig)
 
 PSLModel m = new PSLModel(this, data)
 
@@ -78,8 +142,6 @@ PSLModel m = new PSLModel(this, data)
 m.add predicate: "knows", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "trusts", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "prior", types: [ArgumentType.UniqueID]
-
-boolean sq = false
 
 m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: 1.0, squared: sq   //FFpp
 m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: 1.0, squared: sq //FFpm
@@ -157,7 +219,7 @@ for (int i = 0; i < folds; i++) {
 
 
 Map<String, List<Double []>> results = new HashMap<String, List<Double []>>()
-for (String method : methods)
+for (String method : methodConfigs.keySet())
 	results.put(method, new ArrayList<Double []>())
 
 for (int fold = 0; fold < folds; fold++) {
@@ -238,7 +300,7 @@ for (int fold = 0; fold < folds; fold++) {
 	}
 	System.out.println("Saw " + rv + " rvs and " + ob + " obs")
 
-	/**
+	/*
 	 * POPULATE TEST DATABASE
 	 */
 	allGroundings = testDB.executeQuery(Queries.getQueryForAllAtoms(knows))
@@ -256,22 +318,22 @@ for (int fold = 0; fold < folds; fold++) {
 	Partition dummy2 = new Partition(19999)
 	Database labelsDB = data.getDatabase(dummy, [trusts] as Set, trainLabelPartition)
 
-	for (String method : methods) {
+	for (Map.Entry<String, ConfigBundle> method : methodConfigs.entrySet()) {
 		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 			k.setWeight(weights.get(k))
 
 		/*
 		 * Weight learning
 		 */
-		learn(m, trainDB, labelsDB, epinionsBundle, method, log)
+		learn(m, trainDB, labelsDB, method.getValue(), log)
 
-		System.out.println("Learned model " + method + "\n" + m.toString())
+		System.out.println("Learned model " + method.getKey() + "\n" + m.toString())
 
 		/*
 		 * Inference on test set
 		 */
 		testDB = data.getDatabase(testWritePartitions.get(fold), (Partition []) testReadPartitions.toArray())
-		MPEInference mpe = new MPEInference(m, testDB, epinionsBundle)
+		MPEInference mpe = new MPEInference(m, testDB, baseConfig)
 		FullInferenceResult result = mpe.mpeInference()
 		testDB.close()
 
@@ -296,7 +358,7 @@ for (int fold = 0; fold < folds; fold++) {
 		System.out.println("Area under negative-class PR curve: " + score[1])
 		System.out.println("Area under ROC curve: " + score[2])
 
-		results.get(method).add(fold, score)
+		results.get(method.getKey()).add(fold, score)
 		resultsDB.close()
 		groundTruthDB.close()
 	}
@@ -304,18 +366,40 @@ for (int fold = 0; fold < folds; fold++) {
 	labelsDB.close()
 }
 
-for (String method : methods) {
+for (String method : methodConfigs.keySet()) {
 	def methodStats = results.get(method)
+	sum = new double[3];
+	sumSq = new double[3];
 	for (int fold = 0; fold < folds; fold++) {
 		def score = methodStats.get(fold)
+		for (int i = 0; i < 3; i++) {
+			sum[i] += score[i];
+			sumSq[i] += score[i] * score[i];
+		}
 		System.out.println("Method " + method + ", fold " + fold +", auprc positive: " 
 			+ score[0] + ", negative: " + score[1] + ", auROC: " + score[2])
 	}
+	
+	mean = new double[3];
+	variance = new double[3];
+	for (int i = 0; i < 3; i++) {
+		mean[i] = sum[0] / folds;
+		variance[i] = sumSq[i] / folds - mean[i] * mean[i];
+	}
+	
+	System.out.println();
+	System.out.println("Method " + method + ", auprc positive: (mean/variance) "
+		+ mean[0] + "  /  " + variance[0] );
+	System.out.println("Method " + method + ", auprc negative: (mean/variance) "
+		+ mean[1] + "  /  " + variance[1] );
+	System.out.println("Method " + method + ", auROC: (mean/variance) "
+		+ mean[2] + "  /  " + variance[2] );
+	System.out.println();
 }
 
 
-private void learn(Model m, Database db, Database labelsDB, ConfigBundle config, String method, Logger log) {
-	switch(method) {
+private void learn(Model m, Database db, Database labelsDB, ConfigBundle config, Logger log) {
+	switch(config.getString("method", "")) {
 		case "MLE":
 			MaxLikelihoodMPE mle = new MaxLikelihoodMPE(m, db, labelsDB, config)
 			mle.learn()
@@ -324,28 +408,7 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 			MaxPseudoLikelihood mple = new MaxPseudoLikelihood(m, db, labelsDB, config)
 			mple.learn()
 			break
-		case "MM0.1":
-			config.setProperty(MaxMargin.SLACK_PENALTY, 0.1);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.learn()
-			break
-		case "MM1":
-			config.setProperty(MaxMargin.SLACK_PENALTY, 1);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.learn()
-			break
-		case "MM10":
-			config.setProperty(MaxMargin.SLACK_PENALTY, 10);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.learn()
-			break
-		case "MM100":
-			config.setProperty(MaxMargin.SLACK_PENALTY, 100);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.learn()
-			break
-		case "MM1000":
-			config.setProperty(MaxMargin.SLACK_PENALTY, 1000);
+		case "MM":
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
 			mm.learn()
 			break
@@ -354,11 +417,15 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 			hardRandOM.setSlackPenalty(10000)
 		//hardRandOM.learn()
 			break
-		case "RandOM":
+		case "FirstOrderRandOM":
 			FirstOrderMetropolisRandOM randOM = new FirstOrderMetropolisRandOM(m, db, labelsDB, config)
 			randOM.learn()
 			break
+		case "IncompatibilityRandOM":
+			IncompatibilityMetropolisRandOM randOM = new IncompatibilityMetropolisRandOM(m, db, labelsDB, config);
+			randOM.learn();
+			break
 		default:
-			log.error("Invalid method ")
+			throw new IllegalArgumentException("Unrecognized method.");
 	}
 }

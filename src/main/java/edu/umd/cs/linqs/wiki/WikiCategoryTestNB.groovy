@@ -325,27 +325,27 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 			mple.learn()
 			break
 		case "MM0.1":
-			config.setProperty(MaxMargin.SLACK_PENALTY, 0.1);
+			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 0.1);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
 			mm.learn()
 			break
 		case "MM1":
-			config.setProperty(MaxMargin.SLACK_PENALTY, 1);
+			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 1);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
 			mm.learn()
 			break
 		case "MM10":
-			config.setProperty(MaxMargin.SLACK_PENALTY, 10);
+			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 10);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
 			mm.learn()
 			break
 		case "MM100":
-			config.setProperty(MaxMargin.SLACK_PENALTY, 100);
+			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 100);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
 			mm.learn()
 			break
 		case "MM1000":
-			config.setProperty(MaxMargin.SLACK_PENALTY, 1000);
+			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 1000);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
 			mm.learn()
 			break
