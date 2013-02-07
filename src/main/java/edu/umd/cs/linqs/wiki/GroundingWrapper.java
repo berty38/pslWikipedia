@@ -1,13 +1,23 @@
 package edu.umd.cs.linqs.wiki;
 
 import edu.umd.cs.psl.model.argument.GroundTerm;
+import edu.umd.cs.psl.model.atom.GroundAtom;
+
+import org.apache.commons.lang.builder.HashCodeBuilder;
 
 
 public class GroundingWrapper implements Comparable<GroundingWrapper> {
 	private GroundTerm [] grounding;
-
+	private final int hashcode;
+	
 	public GroundingWrapper(GroundTerm [] args) {
 		grounding = args;
+		
+		HashCodeBuilder hcb = new HashCodeBuilder();
+		for (GroundTerm term : grounding)
+			hcb.append(term);
+		
+		hashcode = hcb.toHashCode();
 	}
 
 	public GroundTerm [] getArray() { return grounding; }
@@ -25,13 +35,8 @@ public class GroundingWrapper implements Comparable<GroundingWrapper> {
 	
 	@Override
 	public int hashCode() {
-		int code = 0;
-		for (int i = 0; i < grounding.length; i++)
-			code += 13*i*grounding[i].hashCode();
-		return code;
+		return hashcode;
 	}
-	
-	
 
 	@Override
 	public int compareTo(GroundingWrapper oth) {
