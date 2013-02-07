@@ -53,14 +53,27 @@ import com.google.common.collect.Iterables;
 //methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
 //methods = ["None"]
 //methods = ["MPLE", "NONE", "MLE", "MM1", "MM10"]
-methods = ["MM10"]
+methods = ["MM1000"]
 
-wordFile = "uniqueDocument.txt"
-labelFile = "uniqueLabels.txt"
-linkFile = "uniqueLinks.txt"
-//linkFile = "perfectLinks.txt"
-talkFile = "uniqueTalk.txt"
+/**
+ * CONFIGURATION PARAMETERS
+ */
+
+def dataPath = "./scraper/"
+def numCategories = 29
+wordFile = "document.txt"
+labelFile = "labels.txt"
+linkFile = "links.txt"
+talkFile = "talk.txt"
 sq = false
+Random rand = new Random(0)
+double trainingObservedRatio = 0.1 // ratio of training set for training NB
+folds = 1 // number of folds
+trainTestRatio = 0.5 // ratio of train to test splits (random)
+filterRatio = 1.0 // ratio of documents to keep (throw away the rest)
+targetSize = 3000 // target size of snowball sampler
+explore = 0.001 // prob of random node in snowball sampler
+
 
 Logger log = LoggerFactory.getLogger(this.class)
 
@@ -68,7 +81,7 @@ ConfigManager cm = ConfigManager.getManager()
 ConfigBundle wikiBundle = cm.getBundle("wiki")
 
 def defaultPath = System.getProperty("java.io.tmpdir")
-String dbpath = wikiBundle.getString("dbpath", defaultPath + "psl")
+String dbpath = wikiBundle.getString("dbpath", defaultPath + File.separator + "psl")
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), wikiBundle)
 
 PSLModel m = new PSLModel(this, data)
@@ -85,18 +98,18 @@ m.add predicate: "Talk", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 //m.add rule : ~(HasCat(A,N)), weight: 1.0, squared: sq
 
 m.add rule : ( ClassifyCat(A,N) ) >> HasCat(A,N),  weight : 1.0, squared: sq
-m.add rule : ( HasCat(B,C) & Link(A,B) & (A - B)) >> HasCat(A,C), weight: 1.0, squared: sq
-//m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) ) >> HasCat(D,C), weight: 1.0, squared: sq
-for (int i = 1; i < 20; i++)  {
+m.add rule : ( HasCat(B,C) & Link(A,B) & (A - B)) >> HasCat(A,C), weight: 0.01, squared: sq
+//m.add rule : ( HasCat(A,C) & Link(A,B) & (A - B)) >> HasCat(B,C), weight: 0.01, squared: sq
+//m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) & (E ^ D) ) >> HasCat(D,C), weight: 1.0, squared: sq
+for (int i = 0; i < numCategories; i++)  {
 	UniqueID cat = data.getUniqueID(i)
 //	m.add rule : ( ClassifyCat(A,cat) ) >> HasCat(A,cat),  weight : 1.0, squared: sq
 //	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 1.0, squared: sq
+//	m.add rule : ( HasCat(A, cat) & Link(A,B)) >> HasCat(B, cat), weight: 1.0, squared: sq
 //	m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0, squared: sq
 }
 
-m.add PredicateConstraint.Functional , on : HasCat
-
-
+m.add PredicateConstraint.PartialFunctional , on : HasCat
 
 
 Partition fullObserved =  new Partition(0)
@@ -107,7 +120,6 @@ Partition groundTruth = new Partition(1)
 /*
  * LOAD DATA
  */
-def dataPath = "./data/"
 def inserter
 inserter = data.getInserter(Link, fullObserved)
 InserterUtils.loadDelimitedData(inserter, dataPath + linkFile)
@@ -116,15 +128,6 @@ InserterUtils.loadDelimitedData(inserter, dataPath + talkFile)
 inserter = data.getInserter(HasCat, groundTruth)
 InserterUtils.loadDelimitedData(inserter, dataPath + labelFile)
 
-// number of folds
-folds = 1
-// ratio of train to test splits
-trainTestRatio = 0.5
-// ratio of documents to keep (throw away the rest)
-filterRatio = 1.0
-// target size of snowball sampler
-targetSize = 3000
-explore = 0.001 // prob of random node in snowball sampler
 trainReadPartitions = new ArrayList<Partition>()
 testReadPartitions = new ArrayList<Partition>()
 trainWritePartitions = new ArrayList<Partition>()
@@ -153,9 +156,6 @@ queries.add(new DatabaseQuery(HasCat(document, A).getFormula()))
 
 def partitionDocuments = new HashMap<Partition, Set<GroundTerm>>()
 
-Random rand = new Random(0)
-double trainingObservedRatio = 0.15
-
 for (int i = 0; i < folds; i++) {
 	trainReadPartitions.add(i, new Partition(i + 2))
 	testReadPartitions.add(i, new Partition(i + folds + 2))
@@ -166,13 +166,13 @@ for (int i = 0; i < folds; i++) {
 	trainLabelPartitions.add(i, new Partition(i + 4*folds + 2))
 	testLabelPartitions.add(i, new Partition(i + 5*folds + 2))
 
-	Set<GroundTerm> [] documents = FoldUtils.generateRandomSplit(data, trainTestRatio,
-			fullObserved, groundTruth, trainReadPartitions.get(i),
-			testReadPartitions.get(i), trainLabelPartitions.get(i), 
-			testLabelPartitions.get(i), queries, keys, filterRatio)
-//	Set<GroundTerm> [] documents = FoldUtils.generateSnowballSplit(data, fullObserved, groundTruth, 
-//		trainReadPartitions.get(i), testReadPartitions.get(i), trainLabelPartitions.get(i), 
-//		testLabelPartitions.get(i), queries, keys, targetSize, Link, explore)
+//	Set<GroundTerm> [] documents = FoldUtils.generateRandomSplit(data, trainTestRatio,
+//			fullObserved, groundTruth, trainReadPartitions.get(i),
+//			testReadPartitions.get(i), trainLabelPartitions.get(i), 
+//			testLabelPartitions.get(i), queries, keys, filterRatio)
+	Set<GroundTerm> [] documents = FoldUtils.generateSnowballSplit(data, fullObserved, groundTruth, 
+		trainReadPartitions.get(i), testReadPartitions.get(i), trainLabelPartitions.get(i), 
+		testLabelPartitions.get(i), queries, keys, targetSize, Link, explore)
 	
 	
 	
@@ -209,12 +209,12 @@ for (int fold = 0; fold < folds; fold++) {
 	nb.learn(nbTrainingKeys.get(fold), dataPath + labelFile, dataPath + wordFile)
 
 	inserter = data.getInserter(ClassifyCat, trainReadPartitions.get(fold))
-	//nb.insertAllPredictions(dataPath + wordFile, trainingKeys.get(fold), inserter)
+//	nb.insertAllPredictions(dataPath + wordFile, trainingKeys.get(fold), inserter)
 	nb.insertAllProbabilities(dataPath + wordFile, trainingKeys.get(fold), inserter)
 	log.debug("training keys size {}", trainingKeys.get(fold).size())
 	
 	inserter = data.getInserter(ClassifyCat, testReadPartitions.get(fold))
-	//nb.insertAllPredictions(dataPath + wordFile, testingKeys.get(fold), inserter)
+//	nb.insertAllPredictions(dataPath + wordFile, testingKeys.get(fold), inserter)
 	nb.insertAllProbabilities(dataPath + wordFile, testingKeys.get(fold), inserter)
 	log.debug("testing keys size {}", testingKeys.get(fold).size())
 	
@@ -226,14 +226,13 @@ for (int fold = 0; fold < folds; fold++) {
 	/*
 	 * POPULATE DATABASE
 	 */
-	def numCategories = 19
 
 	def targetPredicates = [HasCat] as Set
 
 	DatabasePopulator dbPop = new DatabasePopulator(trainDB)
 	Variable Category = new Variable("Category")
 	Set<GroundTerm> categoryGroundings = new HashSet<GroundTerm>()
-	for (int i = 1; i <= numCategories; i++)
+	for (int i = 0; i <= numCategories; i++)
 		categoryGroundings.add(data.getUniqueID(i))
 
 
@@ -326,28 +325,28 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 			mple.learn()
 			break
 		case "MM0.1":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 0.1);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(0.1)
 			mm.learn()
 			break
 		case "MM1":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 1);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(1)
 			mm.learn()
 			break
 		case "MM10":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 10);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(10)
 			mm.learn()
 			break
 		case "MM100":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 100);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(100)
 			mm.learn()
 			break
 		case "MM1000":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 1000);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(1000)
 			mm.learn()
 			break
 		case "HEMRandOM":
