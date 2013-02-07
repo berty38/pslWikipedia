@@ -1,25 +1,5 @@
 package edu.umd.cs.linqs.wiki;
 
-import edu.umd.cs.psl.database.DataStore;
-import edu.umd.cs.psl.database.Database;
-import edu.umd.cs.psl.database.DatabasePopulator;
-import edu.umd.cs.psl.database.DatabaseQuery;
-import edu.umd.cs.psl.database.Partition;
-import edu.umd.cs.psl.database.ResultList;
-import edu.umd.cs.psl.database.loading.Inserter;
-import edu.umd.cs.psl.database.loading.Updater;
-import edu.umd.cs.psl.model.argument.GroundTerm;
-import edu.umd.cs.psl.model.argument.UniqueID;
-import edu.umd.cs.psl.model.argument.Variable;
-import edu.umd.cs.psl.model.atom.Atom;
-import edu.umd.cs.psl.model.atom.GroundAtom;
-import edu.umd.cs.psl.model.atom.ObservedAtom;
-import edu.umd.cs.psl.model.atom.QueryAtom;
-import edu.umd.cs.psl.model.predicate.Predicate;
-import edu.umd.cs.psl.model.predicate.StandardPredicate;
-import edu.umd.cs.psl.util.database.Queries;
-import edu.umd.cs.linqs.wiki.GroundingWrapper;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -30,10 +10,25 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-
 import org.apache.commons.lang.builder.HashCodeBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import edu.umd.cs.psl.database.DataStore;
+import edu.umd.cs.psl.database.Database;
+import edu.umd.cs.psl.database.DatabaseQuery;
+import edu.umd.cs.psl.database.Partition;
+import edu.umd.cs.psl.database.ResultList;
+import edu.umd.cs.psl.database.loading.Inserter;
+import edu.umd.cs.psl.model.argument.GroundTerm;
+import edu.umd.cs.psl.model.argument.Variable;
+import edu.umd.cs.psl.model.atom.Atom;
+import edu.umd.cs.psl.model.atom.GroundAtom;
+import edu.umd.cs.psl.model.atom.ObservedAtom;
+import edu.umd.cs.psl.model.atom.QueryAtom;
+import edu.umd.cs.psl.model.predicate.Predicate;
+import edu.umd.cs.psl.model.predicate.StandardPredicate;
+import edu.umd.cs.psl.util.database.Queries;
 
 class FoldUtils {
 
@@ -163,9 +158,6 @@ class FoldUtils {
 		log.debug("Splitting data from " + observedData + " with ratio " + trainTestRatio +
 				" into new partitions " + train +" and " + test);
 
-		Partition dummy = new Partition(99999);
-
-		Set<StandardPredicate> predicates = data.getRegisteredPredicates();
 		Database db = data.getDatabase(observedData, groundTruth);
 		Set<GroundTerm> keySet = new HashSet<GroundTerm>();
 		for (DatabaseQuery q : queries) {
@@ -198,9 +190,6 @@ class FoldUtils {
 		}
 
 
-		for (GroundTerm term : keyMap.keySet()) {
-			//log.debug(term.toString())
-		}
 		log.debug("Found {} unique keys", keyMap.size());
 		db.close();
 
@@ -337,11 +326,10 @@ class FoldUtils {
 		allGroundingList.addAll(allGroundings);
 		Collections.sort(allGroundingList); 
 
-		HashCodeBuilder hcb = new HashCodeBuilder();
+		HashCodeBuilder hcb = new HashCodeBuilder(3, 7);
 		
 		for (GroundingWrapper grounding : allGroundingList) {
-			int i = rand.nextInt() % n;
-			if (i < 0) i += n;
+			int i = rand.nextInt(n);
 			groundings.get(i).add(grounding);
 			
 			hcb.append(grounding);
@@ -349,7 +337,6 @@ class FoldUtils {
 		}
 		
 		log.debug("Split hashcode {}", hcb.toHashCode());
-		
 		
 		return groundings;
 	}
