@@ -54,16 +54,19 @@ import com.google.common.collect.Iterables;
 
 //methods = ["RandOM", "MM1", "MM10", "MM100", "MM1000", "MLE"]
 //methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
-methods = ["NONE", "MLE", "MPLE", "MM1", "MM10"]
+//methods = ["NONE", "MLE", "MPLE", "MM1", "MM10"]
 //methods = ["MLE"]
 //methods = ["None"]
+methods = ["MM1", "MLE"];
+
+"quad-mm-1-class_weights-none"
 
 Logger log = LoggerFactory.getLogger(this.class)
 
 ConfigManager cm = ConfigManager.getManager()
 ConfigBundle epinionsBundle = cm.getBundle("epinions")
 
-def defaultPath = System.getProperty("java.io.tmpdir")
+def defaultPath = System.getProperty("java.io.tmpdir") + "/"
 String dbpath = epinionsBundle.getString("dbpath", defaultPath + "pslEpinions")
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), epinionsBundle)
 
@@ -322,28 +325,28 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 			mple.learn()
 			break
 		case "MM0.1":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 0.1);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(0.1)
 			mm.learn()
 			break
 		case "MM1":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 1);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(1)
 			mm.learn()
 			break
 		case "MM10":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 10);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(10)
 			mm.learn()
 			break
 		case "MM100":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 100);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(100)
 			mm.learn()
 			break
 		case "MM1000":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 1000);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(1000)
 			mm.learn()
 			break
 		case "HEMRandOM":
