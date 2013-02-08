@@ -52,10 +52,10 @@ import edu.umd.cs.psl.util.database.Queries
  * "FirstOrderRandOM" (FirstOrderMetropolisRandOM)
  * "IncompatibilityRandOM" (IncompatibilityMetropolisRandOM)
  */
-methods = ["FirstOrderRandOM", "IncompatibilityRandOM"];
+methods = ["MLE"];
 
 /* MLE/MPLE options */
-vpStepCounts = [100]
+vpStepCounts = [10]
 vpStepSizes = [10]
 
 /* MM options */
@@ -390,7 +390,7 @@ for (String method : methodConfigs.keySet()) {
 	mean = new double[3];
 	variance = new double[3];
 	for (int i = 0; i < 3; i++) {
-		mean[i] = sum[0] / folds;
+		mean[i] = sum[i] / folds;
 		variance[i] = sumSq[i] / folds - mean[i] * mean[i];
 	}
 
