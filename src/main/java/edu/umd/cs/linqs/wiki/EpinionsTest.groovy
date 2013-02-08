@@ -76,7 +76,8 @@ boolean sq = false
 /*
  * DEFINES EXPERIMENT CONFIGURATIONS
  */
-Map<String, ConfigBundle> methodConfigs = new HashMap<String, ConfigBundle>();
+List<String> methodNames = new ArrayList<String>();
+List<ConfigBundle> methodConfigs = new ArrayList<ConfigBundle>();
 for (String method : methods) {
 	if (method.equals("MLE") || method.equals("MPLE")) {
 		for (int vpStepCount : vpStepCounts) {
@@ -85,7 +86,9 @@ for (String method : methods) {
 				newBundle.addProperty("method", method);
 				newBundle.addProperty(VotedPerceptron.NUM_STEPS_KEY, vpStepCount);
 				newBundle.addProperty(VotedPerceptron.STEP_SIZE_KEY, vpStepSize);
-				methodConfigs.put(((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + vpStepCount + "-" + vpStepSize, newBundle);
+				methodName = ((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + vpStepCount + "-" + vpStepSize;
+				methodNames.add(methodName);
+				methodConfigs.add(newBundle);
 			}
 		}
 	}
@@ -98,8 +101,10 @@ for (String method : methods) {
 					newBundle.addProperty(MaxMargin.SLACK_PENALTY_KEY, slackPenalty);
 					newBundle.addProperty(MaxMargin.BALANCE_LOSS_KEY, lossBalancing);
 					newBundle.addProperty(MaxMargin.SCALE_NORM_KEY, normScaling);
-					methodConfigs.put(((sq) ? "quad" : "linear") + "-mm-" + slackPenalty + "-" + lossBalancing.name().toLowerCase()
-							+ "-" + normScaling.name().toLowerCase(), newBundle);
+					methodName = ((sq) ? "quad" : "linear") + "-mm-" + slackPenalty + "-" + lossBalancing.name().toLowerCase()
+							+ "-" + normScaling.name().toLowerCase();
+					methodNames.add(methodName);
+					methodConfigs.add(newBundle);
 				}
 			}
 		}
@@ -113,8 +118,10 @@ for (String method : methods) {
 		newBundle.addProperty(MetropolisRandOM.NUM_SAMPLES_KEY, numSamples);
 		newBundle.addProperty(MetropolisRandOM.BURN_IN_KEY, burnIn);
 		newBundle.addProperty(MetropolisRandOM.MAX_ITER_KEY, maxIter);
-		methodConfigs.put(((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + numSamples + "-" + burnIn
-				+ "-" + maxIter, newBundle);
+		methodName = ((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + numSamples + "-" + burnIn
+				+ "-" + maxIter;
+		methodNames.add(methodName);
+		methodConfigs.add(newBundle);
 	}
 	else
 		throw new IllegalArgumentException("Unrecognized method: " + method);
@@ -123,8 +130,8 @@ for (String method : methods) {
 /*
  * PRINTS EXPERIMENT CONFIGURATIONS
  */
-for (Map.Entry<String, ConfigBundle> config : methodConfigs.entrySet())
-	System.out.println("Config for " + config.getKey() + "\n" + config.getValue());
+for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++)
+	System.out.println("Config for " + methodNames.get(methodIndex) + "\n" + methodConfigs.get(methodIndex));
 
 /*
  * INITIALIZES DATASTORE AND MODEL
@@ -190,7 +197,7 @@ inserter = data.getInserter(trusts, fullTrusts)
 InserterUtils.loadDelimitedDataTruth(inserter, dataPath + "trusts.txt")
 
 // number of folds
-folds = 8
+folds = 3
 
 List<Partition> trustsPartitions = new ArrayList<Partition>(folds)
 List<Partition> knowsPartitions = new ArrayList<Partition>(folds)
@@ -198,8 +205,6 @@ List<Partition> trainWritePartitions = new ArrayList<Partition>(folds)
 List<Partition> testWritePartitions = new ArrayList<Partition>(folds)
 List<Partition> trainPriorPartitions = new ArrayList<Partition>(folds)
 List<Partition> testPriorPartitions = new ArrayList<Partition>(folds)
-
-Random rand = new Random(0)
 
 for (int i = 0; i < folds; i++) {
 	knowsPartitions.add(i, new Partition(i + 2))
@@ -217,10 +222,9 @@ for (int i = 0; i < folds; i++) {
 }
 
 
-
-Map<String, List<Double []>> results = new HashMap<String, List<Double []>>()
-for (String method : methodConfigs.keySet())
-	results.put(method, new ArrayList<Double []>())
+List<List<Double []>> results = new ArrayList<List<Double []>>()
+for (int i = 0; i < methodNames.size(); i++)
+	results.add(new ArrayList<Double []>())
 
 for (int fold = 0; fold < folds; fold++) {
 
@@ -318,16 +322,16 @@ for (int fold = 0; fold < folds; fold++) {
 	Partition dummy2 = new Partition(19999)
 	Database labelsDB = data.getDatabase(dummy, [trusts] as Set, trainLabelPartition)
 
-	for (Map.Entry<String, ConfigBundle> method : methodConfigs.entrySet()) {
+	for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 			k.setWeight(weights.get(k))
 
 		/*
 		 * Weight learning
 		 */
-		learn(m, trainDB, labelsDB, method.getValue(), log)
+		learn(m, trainDB, labelsDB, methodConfigs.get(methodIndex), log)
 
-		System.out.println("Learned model " + method.getKey() + "\n" + m.toString())
+		System.out.println("Learned model " + methodNames.get(methodIndex) + "\n" + m.toString())
 
 		/*
 		 * Inference on test set
@@ -365,7 +369,7 @@ for (int fold = 0; fold < folds; fold++) {
 		System.out.println("Area under negative-class PR curve: " + score[1])
 		System.out.println("Area under ROC curve: " + score[2])
 
-		results.get(method.getKey()).add(fold, score)
+		results.get(methodIndex).add(fold, score)
 		resultsDB.close()
 		groundTruthDB.close()
 	}
@@ -373,8 +377,9 @@ for (int fold = 0; fold < folds; fold++) {
 	labelsDB.close()
 }
 
-for (String method : methodConfigs.keySet()) {
-	def methodStats = results.get(method)
+for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
+	def methodStats = results.get(methodIndex)
+	methodName = methodNames.get(methodIndex)
 	sum = new double[3];
 	sumSq = new double[3];
 	for (int fold = 0; fold < folds; fold++) {
@@ -383,7 +388,7 @@ for (String method : methodConfigs.keySet()) {
 			sum[i] += score[i];
 			sumSq[i] += score[i] * score[i];
 		}
-		System.out.println("Method " + method + ", fold " + fold +", auprc positive: "
+		System.out.println("Method " + methodName + ", fold " + fold +", auprc positive: "
 				+ score[0] + ", negative: " + score[1] + ", auROC: " + score[2])
 	}
 
@@ -395,11 +400,11 @@ for (String method : methodConfigs.keySet()) {
 	}
 
 	System.out.println();
-	System.out.println("Method " + method + ", auprc positive: (mean/variance) "
+	System.out.println("Method " + methodName + ", auprc positive: (mean/variance) "
 			+ mean[0] + "  /  " + variance[0] );
-	System.out.println("Method " + method + ", auprc negative: (mean/variance) "
+	System.out.println("Method " + methodName + ", auprc negative: (mean/variance) "
 			+ mean[1] + "  /  " + variance[1] );
-	System.out.println("Method " + method + ", auROC: (mean/variance) "
+	System.out.println("Method " + methodName + ", auROC: (mean/variance) "
 			+ mean[2] + "  /  " + variance[2] );
 	System.out.println();
 }
