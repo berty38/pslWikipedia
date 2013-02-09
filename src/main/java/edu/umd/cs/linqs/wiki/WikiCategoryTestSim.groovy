@@ -47,9 +47,23 @@ import edu.umd.cs.psl.model.parameters.PositiveWeight;
 import edu.umd.cs.psl.model.parameters.Weight
 import com.google.common.collect.Iterables;
 
-//methods = ["RandOM", "MM1", "MM10", "MM100", "MM1000", "MLE"]
-//methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
-methods = ["NONE", "MLE", "MPLE", "MM1", "MM10"]
+//methods = ["NONE", "MLE", "MPLE", "MM1", "MM10"]
+methods = ["NONE"]
+
+def numCategories = 14
+def dataPath = "./scraper/"
+linkFile = "links.txt"
+talkFile = "talk.txt"
+labelFile = "labels.txt"
+similarityFile = "document-similarity.txt"
+// number of folds
+folds = 1
+// ratio of train to test splits
+trainTestRatio = 0.5
+// ratio of documents to keep (throw away the rest)
+filterRatio = 1.0
+double seedRatio = 0.2
+
 
 Logger log = LoggerFactory.getLogger(this.class)
 
@@ -71,17 +85,17 @@ m.add predicate: "Link", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "Talk", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 
 //prior
-m.add rule : ~(HasCat(A,N)), weight: 1.0
+m.add rule : ~(HasCat(A,N)), weight: 0.1
 
 m.add rule : ( Similar(A,B) & HasCat(A,C) ) >> HasCat(B,C),  weight : 1.0
-m.add rule : ( HasCat(B,C) & Link(A,B) & (A - B)) >> HasCat(A,C), weight: 1.0
-m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) ) >> HasCat(D,C), weight: 1.0
-for (int i = 1; i < 20; i++) {
-	UniqueID cat = data.getUniqueID(i)
-	m.add rule : ( Similar(A,B) & HasCat(A,cat) ) >> HasCat(B,cat),  weight : 1.0
-	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 1.0
-	m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0
-}
+//m.add rule : ( HasCat(B,C) & Link(A,B) & (A - B)) >> HasCat(A,C), weight: 1.0
+//m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) ) >> HasCat(D,C), weight: 1.0
+//for (int i = 1; i < 20; i++) {
+//	UniqueID cat = data.getUniqueID(i)
+//	m.add rule : ( Similar(A,B) & HasCat(A,cat) ) >> HasCat(B,cat),  weight : 1.0
+//	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 1.0
+//	m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0
+//}
 
 m.add PredicateConstraint.Functional , on : HasCat
 
@@ -96,25 +110,18 @@ Partition groundTruth = new Partition(1)
 /*
  * LOAD DATA
  */
-def dataPath = "./data/"
 def inserter
 inserter = data.getInserter(Link, fullObserved)
-InserterUtils.loadDelimitedData(inserter, dataPath + "uniqueLinks.txt")
+InserterUtils.loadDelimitedData(inserter, dataPath + linkFile)
 inserter = data.getInserter(Similar, fullObserved)
-InserterUtils.loadDelimitedDataTruth(inserter, dataPath + "documentSimilarity.txt")
+InserterUtils.loadDelimitedDataTruth(inserter, dataPath + similarityFile)
 inserter = data.getInserter(Talk, fullObserved)
-InserterUtils.loadDelimitedData(inserter, dataPath + "talk.txt")
+InserterUtils.loadDelimitedData(inserter, dataPath + talkFile)
 inserter = data.getInserter(HasCat, groundTruth)
-InserterUtils.loadDelimitedData(inserter, dataPath + "newCategoryBelonging.txt")
+InserterUtils.loadDelimitedData(inserter, dataPath + labelFile)
 
 
 
-// number of folds
-folds = 1
-// ratio of train to test splits
-trainTestRatio = 0.5
-// ratio of documents to keep (throw away the rest)
-filterRatio = 0.1
 trainReadPartitions = new ArrayList<Partition>()
 testReadPartitions = new ArrayList<Partition>()
 trainWritePartitions = new ArrayList<Partition>()
@@ -146,7 +153,6 @@ queries.add(new DatabaseQuery(HasCat(document, A).getFormula()))
 def partitionDocuments = new HashMap<Partition, Set<GroundTerm>>()
 
 Random rand = new Random(0)
-double seedRatio = 0.2
 
 for (int i = 0; i < folds; i++) {
 	trainReadPartitions.add(i, new Partition(i + 2))
@@ -158,10 +164,15 @@ for (int i = 0; i < folds; i++) {
 	trainLabelPartitions.add(i, new Partition(i + 4*folds + 2))
 	testLabelPartitions.add(i, new Partition(i + 5*folds + 2))
 	
+
 	Set<GroundTerm> [] documents = FoldUtils.generateRandomSplit(data, trainTestRatio,
 			fullObserved, groundTruth, trainReadPartitions.get(i),
 			testReadPartitions.get(i), trainLabelPartitions.get(i), 
 			testLabelPartitions.get(i), queries, keys, filterRatio)
+//	Set<GroundTerm> [] documents = FoldUtils.generateSnowballSplit(data, fullObserved, groundTruth, 
+//		trainReadPartitions.get(i), testReadPartitions.get(i), trainLabelPartitions.get(i), 
+//		testLabelPartitions.get(i), queries, keys, targetSize, Link, explore)
+	
 	partitionDocuments.put(trainReadPartitions.get(i), documents[0])
 	partitionDocuments.put(testReadPartitions.get(i), documents[1])
 
@@ -223,7 +234,6 @@ for (int fold = 0; fold < folds; fold++) {
 	/*
 	 * POPULATE DATABASE
 	 */
-	def numCategories = 19
 
 	def targetPredicates = [HasCat] as Set
 
@@ -321,28 +331,28 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 			mple.learn()
 			break
 		case "MM0.1":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 0.1);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(0.1)
 			mm.learn()
 			break
 		case "MM1":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 1);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(1)
 			mm.learn()
 			break
 		case "MM10":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 10);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(10)
 			mm.learn()
 			break
 		case "MM100":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 100);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(100)
 			mm.learn()
 			break
 		case "MM1000":
+			config.setProperty(MaxMargin.SLACK_PENALTY, 1000);
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.setSlackPenalty(1000)
 			mm.learn()
 			break
 		case "HEMRandOM":

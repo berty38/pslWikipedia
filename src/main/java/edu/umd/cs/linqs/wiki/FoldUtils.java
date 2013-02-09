@@ -63,22 +63,22 @@ class FoldUtils {
 		List<GroundTerm> nodes = new ArrayList<GroundTerm>(nodeSet.size());
 		nodes.addAll(nodeSet);
 
-		Set<GroundTerm> trainSet = new HashSet<GroundTerm>();
-		Set<GroundTerm> testSet = new HashSet<GroundTerm>();
+		List<GroundTerm> trainList = new ArrayList<GroundTerm>();
+		List<GroundTerm> testList = new ArrayList<GroundTerm>();
 
 		// start sampling
 		GroundTerm nextTrain = nodes.get(rand.nextInt(nodes.size()));
 		nodes.remove(nextTrain);
 		GroundTerm nextTest = nodes.get(rand.nextInt(nodes.size()));
 		nodes.remove(nextTest);
-		trainSet.add(nextTrain);
-		testSet.add(nextTest);
+		trainList.add(nextTrain);
+		testList.add(nextTest);
 		log.debug("Started snowball sampling with train seed {}, test {}", nextTrain, nextTest);
 
 		List<GroundTerm> frontierTrain = new ArrayList<GroundTerm>();
 		List<GroundTerm> frontierTest = new ArrayList<GroundTerm>();
 		boolean check;
-		while (nodes.size() > 0 && (trainSet.size() < targetSize || testSet.size() < targetSize)) {
+		while (nodes.size() > 0 && (trainList.size() < targetSize || testList.size() < targetSize)) {
 			// sample training point
 			nextTrain = (rand.nextDouble() < explore) ? nodes.get(rand.nextInt(nodes.size())) :
 					sampleNextNeighbor(db, edge, nextTrain, nodes, frontierTrain, rand);
@@ -89,7 +89,7 @@ class FoldUtils {
 			if (!check) {
 				log.debug("Something went wrong. Attempted to add a train node {} that should have already been removed", nextTest);
 			}
-			trainSet.add(nextTrain);
+			trainList.add(nextTrain);
 
 			if (!nodes.isEmpty()) {
 				// sample testing point
@@ -102,16 +102,23 @@ class FoldUtils {
 				if (!check)
 					log.debug("Something went wrong. Attempted to add a test node {} that should have already been removed", nextTest);
 
-				testSet.add(nextTest);
+				testList.add(nextTest);
 			}
 			//			log.debug("added {} to train, added {} to test", nextTrain, nextTest)
 		}
 		db.close();
 
-		Map<GroundTerm, Partition> keyMap = new HashMap<GroundTerm, Partition>(trainSet.size() + testSet.size());
-		for (GroundTerm term : trainSet) keyMap.put(term, train);
-		for (GroundTerm term : testSet) keyMap.put(term, test);
+		Map<GroundTerm, Partition> keyMap = new HashMap<GroundTerm, Partition>(trainList.size() + testList.size());
+		for (GroundTerm term : trainList) keyMap.put(term, train);
+		for (GroundTerm term : testList) keyMap.put(term, test);
+		
+		// test for consistent splits
+		HashCodeBuilder hcb = new HashCodeBuilder(1,5);
+		for (GroundTerm term : trainList) hcb.append(term);
+		for (GroundTerm term : testList) hcb.append(term);
 
+		log.debug("Hashcode of snowball split: {}", hcb.toHashCode());
+		
 		return processSplits(data, observedData, groundTruth, train, test, trainLabels, testLabels, queries, keys, keyMap);
 	}
 
@@ -176,21 +183,23 @@ class FoldUtils {
 
 		List<GroundTerm> keyList = new ArrayList<GroundTerm>();
 		keyList.addAll(keySet);
+		Collections.sort(keyList);
 
-		Collections.shuffle(keyList);
+		Collections.shuffle(keyList, rand);
 
 		int split = (int) (keyList.size() * trainTestRatio);
 
+		HashCodeBuilder hcb = new HashCodeBuilder(1,5);
 		Map<GroundTerm, Partition> keyMap = new HashMap<GroundTerm, Partition>();
 		for (int i = 0; i < keyList.size(); i++) {
 			if (i < split)
 				keyMap.put(keyList.get(i), train);
 			else
 				keyMap.put(keyList.get(i), test);
+			hcb.append(keyList.get(i));
 		}
 
-
-		log.debug("Found {} unique keys", keyMap.size());
+		log.debug("Found {} unique keys, split hashcode: {}", keyMap.size(), hcb.toHashCode());
 		db.close();
 
 		return processSplits(data, observedData, groundTruth, train, test, trainLabels, testLabels, queries, keys, keyMap);

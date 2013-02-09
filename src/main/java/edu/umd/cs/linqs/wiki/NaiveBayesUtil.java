@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Random;
 import java.util.Scanner;
 import java.util.Set;
 
@@ -28,8 +27,8 @@ public class NaiveBayesUtil {
 	private Logger log;
 	private Set<Integer> allWords;
 	private CounterMap<Integer> catDocTotals;
-	private CounterMap<Integer> catWordTotals;
-	private Map<Integer, CounterMap<Integer>> catWordCounts;
+	private CounterMap<Integer> totalWordsPerCat;
+	private Map<Integer, CounterMap<Integer>> wordsPerCat;
 	
 
 	private final int prior = 1;
@@ -50,7 +49,7 @@ public class NaiveBayesUtil {
 			Scanner catScanner = new Scanner(new FileReader(categoryFile));
 
 			catDocTotals = new CounterMap<Integer>();
-			catWordTotals = new CounterMap<Integer>();
+			totalWordsPerCat = new CounterMap<Integer>();
 
 			Map<Integer, Integer> categories = new HashMap<Integer, Integer>();
 
@@ -74,9 +73,9 @@ public class NaiveBayesUtil {
 			catScanner.close();
 
 			// initialize category word counter
-			catWordCounts = new HashMap<Integer, CounterMap<Integer>>();
+			wordsPerCat = new HashMap<Integer, CounterMap<Integer>>();
 			for (Integer cat : catDocTotals.keySet())  {
-				catWordCounts.put(cat, new CounterMap<Integer>());
+				wordsPerCat.put(cat, new CounterMap<Integer>());
 			}
 
 			// load words
@@ -86,14 +85,14 @@ public class NaiveBayesUtil {
 				String line = wordScanner.nextLine();
 				String [] tokens = line.split("\t");
 				Integer docID = Integer.decode(tokens[0]);
-				Map<Integer, Integer> docWords = parseWords(tokens[1]);
-				for (Map.Entry<Integer, Integer> e : docWords.entrySet()) {
+				Map<Integer, Double> docWords = parseWords(tokens[1]);
+				for (Map.Entry<Integer, Double> e : docWords.entrySet()) {
 					Integer wordID = e.getKey();
-					Integer count = e.getValue();
+					Double count = (double) e.getValue();
 					if (trainingKeys.contains(docID)) {
 						Integer cat = categories.get(docID);
-						catWordCounts.get(cat).increment(wordID, count);
-						catWordTotals.increment(cat, count);
+						wordsPerCat.get(cat).increment(wordID, count);
+						totalWordsPerCat.increment(cat, count);
 						//log.debug("Document {} in category {} had word " + wordID, docID, cat);
 					}
 					allWords.add(wordID);
@@ -102,8 +101,6 @@ public class NaiveBayesUtil {
 			wordScanner.close();
 
 			log.debug("Finished word counts");
-
-
 
 			if (log.isDebugEnabled()) {
 				// evaluate training accuracy
@@ -116,11 +113,11 @@ public class NaiveBayesUtil {
 					Integer docID = Integer.decode(tokens[0]);
 					if (categories.containsKey(docID)) {
 						Integer cat = categories.get(docID);
-						Map<Integer, Integer> docWords = parseWords(tokens[1]);
+						Map<Integer, Double> docWords = parseWords(tokens[1]);
 						Map<Integer, Double> prediction = predict(docWords);
 						Integer pred = -1;
 						//log.debug(prediction.toString());
-						for (Integer c : catWordCounts.keySet())
+						for (Integer c : wordsPerCat.keySet())
 							if (pred == -1 || prediction.get(c) > prediction.get(pred))
 								pred = c;
 						//log.debug("Predicted {}, true {}", pred, cat);
@@ -148,7 +145,7 @@ public class NaiveBayesUtil {
 	private void convertToProbability(Map<Integer, Double> scores) {
 		double max = Double.NEGATIVE_INFINITY;
 		for (Double score : scores.values())
-			max = Math.max(max,  score);
+			max = Math.max(max, score);
 		double normalizer = 0;
 		for (Double score : scores.values())
 			normalizer += Math.exp(score - max);
@@ -156,13 +153,13 @@ public class NaiveBayesUtil {
 			scores.put(e.getKey(), Math.exp(e.getValue() - max - Math.log(normalizer)));
 	}
 
-	private Map<Integer, Integer> parseWords(String string) {
+	private Map<Integer, Double> parseWords(String string) {
 		String [] tokens = string.split(" ");
-		Map<Integer, Integer> words = new HashMap<Integer, Integer>(1000);
+		Map<Integer, Double> words = new HashMap<Integer, Double>(1000);
 		for (int i = 0; i < tokens.length; i++) {
 			if (tokens[i].length() > 1) {
 				String [] subTokens = tokens[i].split(":");
-				words.put(Integer.decode(subTokens[0]), Integer.decode(subTokens[1]));
+				words.put(Integer.decode(subTokens[0]), Double.parseDouble(subTokens[1]));
 			}
 		}
 		return words;
@@ -173,16 +170,16 @@ public class NaiveBayesUtil {
 	 * @param docWords word ids contained in this file
 	 * @return map of probabilities for each category
 	 */
-	public Map<Integer, Double> predict(Map<Integer, Integer> docWords) {
+	public Map<Integer, Double> predict(Map<Integer, Double> docWords) {
 		Map<Integer, Double> scores = new HashMap<Integer, Double>();
 		for (Integer cat : catDocTotals.keySet()) {
 			double score = Math.log(catDocTotals.get(cat) + catPrior);
-			CounterMap<Integer> counts = catWordCounts.get(cat);
-			for (Map.Entry<Integer, Integer> e : docWords.entrySet()) {
+			CounterMap<Integer> counts = wordsPerCat.get(cat);
+			for (Map.Entry<Integer, Double> e : docWords.entrySet()) {
 				Integer word = e.getKey();
-				Integer count = e.getValue();
+				Double count = e.getValue();
 				if (allWords.contains(word)) {
-					score += count * (Math.log(counts.get(word) + prior) - Math.log(catWordTotals.get(cat) + allWords.size()*prior));
+					score += count * (Math.log(counts.get(word) + prior) - Math.log(totalWordsPerCat.get(cat) + allWords.size()*prior));
 				}
 			}
 			//log.debug("Document scores " + score + " for label " + cat);
@@ -197,7 +194,7 @@ public class NaiveBayesUtil {
 	 * @param docWords set of observed words
 	 * @return category with maximum likelihood
 	 */
-	public Integer predictBest(Map<Integer, Integer> docWords) {
+	public Integer predictBest(Map<Integer, Double> docWords) {
 		Map<Integer, Double> scores = predict(docWords);
 		double bestScore = Double.NEGATIVE_INFINITY;
 		Integer bestCat = 0;
@@ -227,7 +224,7 @@ public class NaiveBayesUtil {
 				String [] tokens = line.split("\t");
 				Integer docID = Integer.decode(tokens[0]);
 				if (documents.contains(docID)) {
-					Map<Integer, Integer> docWords = parseWords(tokens[1]);
+					Map<Integer, Double> docWords = parseWords(tokens[1]);
 
 					predictions.put(docID, this.predict(docWords));
 					docWords.clear();
@@ -259,7 +256,7 @@ public class NaiveBayesUtil {
 				String [] tokens = line.split("\t");
 				Integer docID = Integer.decode(tokens[0]);
 				if (documents.contains(docID)) {
-					Map<Integer, Integer> docWords = parseWords(tokens[1]);
+					Map<Integer, Double> docWords = parseWords(tokens[1]);
 
 					Map<Integer, Double> probs = this.predict(docWords);
 
@@ -293,7 +290,7 @@ public class NaiveBayesUtil {
 				String [] tokens = line.split("\t");
 				Integer docID = Integer.decode(tokens[0]);
 				if (documents.contains(docID)) {
-					Map<Integer, Integer> docWords = parseWords(tokens[1]);
+					Map<Integer, Double> docWords = parseWords(tokens[1]);
 
 					Integer cat = this.predictBest(docWords);
 					
@@ -310,18 +307,18 @@ public class NaiveBayesUtil {
 	
 	private class CounterMap<T> {
 		public CounterMap() {
-			counts = new HashMap<T,Integer>();
+			counts = new HashMap<T, Double>();
 		}
 
 		public void increment(T key) {
 			this.increment(key, 1);
 		}
 		
-		public void increment(T key, Integer i) {
-			int c = 0;
+		public void increment(T key, Number i) {
+			double c = 0;
 			if (counts.containsKey(key))
 				c = counts.get(key);
-			counts.put(key, c+i);
+			counts.put(key, i.doubleValue() + c);
 		}
 
 		public int get(T key) {
@@ -332,8 +329,9 @@ public class NaiveBayesUtil {
 
 		public void clear() { counts.clear(); };
 		public Set<T> keySet() { return counts.keySet(); }
+		public Set<Map.Entry<T, Double>> entrySet() { return counts.entrySet(); }
 
-		private Map<T,Integer> counts;
+		private Map<T,Double> counts;
 
 	}
 }

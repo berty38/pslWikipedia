@@ -41,33 +41,49 @@ import edu.umd.cs.psl.model.argument.UniqueID
 import edu.umd.cs.psl.model.argument.Variable
 import edu.umd.cs.psl.model.atom.GroundAtom
 import edu.umd.cs.psl.model.atom.QueryAtom
+import edu.umd.cs.psl.model.atom.RandomVariableAtom;
 import edu.umd.cs.psl.model.function.AttributeSimilarityFunction
 import edu.umd.cs.psl.ui.loading.*
 import edu.umd.cs.psl.util.database.Queries
 import edu.umd.cs.psl.model.kernel.CompatibilityKernel;
 import edu.umd.cs.psl.model.parameters.PositiveWeight;
 import edu.umd.cs.psl.model.parameters.Weight
+import edu.umd.cs.psl.model.predicate.Predicate;
+
 import com.google.common.collect.Iterables;
 
 //methods = ["RandOM", "MM1", "MM10", "MM100", "MM1000", "MLE"]
 //methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
 //methods = ["None"]
 //methods = ["MPLE", "NONE", "MLE", "MM1", "MM10"]
-methods = ["MM1000"]
+methods = ["NB", "MM0.1"]
+methods = ["NB"]
 
 /**
  * CONFIGURATION PARAMETERS
  */
 
-def dataPath = "./scraper/"
-def numCategories = 29
+dataPath = "./scraper/"
+numCategories = 29
 wordFile = "document.txt"
 labelFile = "labels.txt"
 linkFile = "links.txt"
 talkFile = "talk.txt"
+//dataPath = "./toydata/"
+//numCategories = 4
+//wordFile = "document.txt"
+//labelFile = "labels.txt"
+//linkFile = "links.txt"
+//talkFile = "talk.txt"
+//dataPath = "./data/"
+//numCategories = 19
+//wordFile = "pruned-document.txt"
+//labelFile = "newCategoryBelonging.txt"
+//linkFile = "uniqueLinks.txt"
+//talkFile = "talk.txt"
 sq = false
 Random rand = new Random(0)
-double trainingObservedRatio = 0.1 // ratio of training set for training NB
+double trainingObservedRatio = 0.5 // ratio of training set for training NB
 folds = 1 // number of folds
 trainTestRatio = 0.5 // ratio of train to test splits (random)
 filterRatio = 1.0 // ratio of documents to keep (throw away the rest)
@@ -98,15 +114,13 @@ m.add predicate: "Talk", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 //m.add rule : ~(HasCat(A,N)), weight: 1.0, squared: sq
 
 m.add rule : ( ClassifyCat(A,N) ) >> HasCat(A,N),  weight : 1.0, squared: sq
-m.add rule : ( HasCat(B,C) & Link(A,B) & (A - B)) >> HasCat(A,C), weight: 0.01, squared: sq
-//m.add rule : ( HasCat(A,C) & Link(A,B) & (A - B)) >> HasCat(B,C), weight: 0.01, squared: sq
+m.add rule : ( HasCat(A,C) & Link(A,B) & (A - B)) >> HasCat(B,C), weight: 0.0, squared: sq
 //m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) & (E ^ D) ) >> HasCat(D,C), weight: 1.0, squared: sq
 for (int i = 0; i < numCategories; i++)  {
 	UniqueID cat = data.getUniqueID(i)
-//	m.add rule : ( ClassifyCat(A,cat) ) >> HasCat(A,cat),  weight : 1.0, squared: sq
-//	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 1.0, squared: sq
-//	m.add rule : ( HasCat(A, cat) & Link(A,B)) >> HasCat(B, cat), weight: 1.0, squared: sq
-//	m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0, squared: sq
+	m.add rule : ( ClassifyCat(A,cat) ) >> HasCat(A,cat),  weight : 1.0, squared: sq
+	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 0.0, squared: sq
+	//m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0, squared: sq
 }
 
 m.add PredicateConstraint.PartialFunctional , on : HasCat
@@ -166,13 +180,13 @@ for (int i = 0; i < folds; i++) {
 	trainLabelPartitions.add(i, new Partition(i + 4*folds + 2))
 	testLabelPartitions.add(i, new Partition(i + 5*folds + 2))
 
-//	Set<GroundTerm> [] documents = FoldUtils.generateRandomSplit(data, trainTestRatio,
-//			fullObserved, groundTruth, trainReadPartitions.get(i),
-//			testReadPartitions.get(i), trainLabelPartitions.get(i), 
-//			testLabelPartitions.get(i), queries, keys, filterRatio)
-	Set<GroundTerm> [] documents = FoldUtils.generateSnowballSplit(data, fullObserved, groundTruth, 
-		trainReadPartitions.get(i), testReadPartitions.get(i), trainLabelPartitions.get(i), 
-		testLabelPartitions.get(i), queries, keys, targetSize, Link, explore)
+	Set<GroundTerm> [] documents = FoldUtils.generateRandomSplit(data, trainTestRatio,
+			fullObserved, groundTruth, trainReadPartitions.get(i),
+			testReadPartitions.get(i), trainLabelPartitions.get(i), 
+			testLabelPartitions.get(i), queries, keys, filterRatio)
+//	Set<GroundTerm> [] documents = FoldUtils.generateSnowballSplit(data, fullObserved, groundTruth, 
+//		trainReadPartitions.get(i), testReadPartitions.get(i), trainLabelPartitions.get(i), 
+//		testLabelPartitions.get(i), queries, keys, targetSize, Link, explore)
 	
 	
 	
@@ -260,7 +274,13 @@ for (int fold = 0; fold < folds; fold++) {
 	Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
 	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 		weights.put(k, k.getWeight());
-
+		
+	def groundTruthDB = data.getDatabase(testLabelPartitions.get(fold), [HasCat] as Set)
+	DataOutputter.outputPredicate("output/graph/groundTruth" + fold + ".node" , groundTruthDB, HasCat, ",", false, "nodeid,label")
+	groundTruthDB.close()
+	
+	DataOutputter.outputPredicate("output/graph/groundTruth" + fold + ".directed" , testDB, Link, ",", false, null)
+	
 	for (String method : methods) {
 		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 			k.setWeight(weights.get(k))
@@ -275,6 +295,9 @@ for (int fold = 0; fold < folds; fold++) {
 		/*
 		 * Inference on test set
 		 */
+		Set<GroundAtom> allAtoms = Queries.getAllAtoms(testDB, HasCat)
+		for (RandomVariableAtom atom : Iterables.filter(allAtoms, RandomVariableAtom))
+			atom.setValue(0.0)
 		MPEInference mpe = new MPEInference(m, testDB, wikiBundle)
 		FullInferenceResult result = mpe.mpeInference()
 		System.out.println("Objective: " + result.getTotalWeightedIncompatibility())
@@ -283,7 +306,7 @@ for (int fold = 0; fold < folds; fold++) {
 		 * Evaluation
 		 */
 		def comparator = new DiscretePredictionComparator(testDB)
-		def groundTruthDB = data.getDatabase(testLabelPartitions.get(fold), [HasCat] as Set)
+		groundTruthDB = data.getDatabase(testLabelPartitions.get(fold), [HasCat] as Set)
 		comparator.setBaseline(groundTruthDB)
 		comparator.setResultFilter(new MaxValueFilter(HasCat, 1))
 		comparator.setThreshold(Double.MIN_VALUE) // treat best value as true as long as it is nonzero
@@ -296,6 +319,8 @@ for (int fold = 0; fold < folds; fold++) {
 
 		results.get(method).add(fold, stats)
 	
+		DataOutputter.outputClassificationPredictions("output/" + method + fold + ".csv", testDB, HasCat, ",")
+		
 		groundTruthDB.close()
 	}
 	trainDB.close()
@@ -358,6 +383,11 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 			FirstOrderMetropolisRandOM randOM = new FirstOrderMetropolisRandOM(m, db, labelsDB, config)
 			randOM.learn()
 			break
+		case "SET_TO_ONE":
+			for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
+				k.setWeight(new PositiveWeight(1.0))
+		case "NONE":
+			break;
 		default:
 			log.error("Invalid method ")
 	}
