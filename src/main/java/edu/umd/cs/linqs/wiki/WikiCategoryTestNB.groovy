@@ -1,5 +1,6 @@
 package edu.umd.cs.linqs.wiki
 
+import java.lang.annotation.Documented;
 import java.util.Set;
 
 import junit.framework.TestResult;
@@ -54,10 +55,10 @@ import com.google.common.collect.Iterables;
 
 //methods = ["RandOM", "MM1", "MM10", "MM100", "MM1000", "MLE"]
 //methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
-//methods = ["None"]
+methods = ["None"]
 //methods = ["MPLE", "NONE", "MLE", "MM1", "MM10"]
-methods = ["NB", "MM0.1"]
-methods = ["NB"]
+//methods = ["MM1", "NB"]
+
 
 /**
  * CONFIGURATION PARAMETERS
@@ -108,20 +109,25 @@ PSLModel m = new PSLModel(this, data)
 m.add predicate: "ClassifyCat", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "HasCat", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "Link", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
-m.add predicate: "Talk", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate: "Cat", types: [ArgumentType.UniqueID]
+m.add setcomparison: "avgValue", on: HasCat, using: SetComparison.Average
+//m.add predicate: "Talk", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 
 //prior
-//m.add rule : ~(HasCat(A,N)), weight: 1.0, squared: sq
+m.add rule : ~(HasCat(A,N)), weight: 0.001, squared: sq
 
-m.add rule : ( ClassifyCat(A,N) ) >> HasCat(A,N),  weight : 1.0, squared: sq
-m.add rule : ( HasCat(A,C) & Link(A,B) & (A - B)) >> HasCat(B,C), weight: 0.0, squared: sq
+m.add rule : ( ClassifyCat(D,C) ) >> HasCat(D,C),  weight : 1.0, squared: sq
+//m.add rule : ( HasCat(D,C) ) >> ClassifyCat(D,C), weight : 1.0, squared : sq
+m.add rule : ( avgValue({D.Link}, {L})) >> HasCat(D,L), weight : 1.0, squared: sq
+//m.add rule : ( HasCat(D,C) ) >> (avgValue({D.Link}, {C})), weight : 1.0, squared: sq
+//m.add rule : ( HasCat(A,C) & Link(A,B) & (A - B)) >> HasCat(B,C), weight: 0.0, squared: sq
 //m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) & (E ^ D) ) >> HasCat(D,C), weight: 1.0, squared: sq
-for (int i = 0; i < numCategories; i++)  {
-	UniqueID cat = data.getUniqueID(i)
-	m.add rule : ( ClassifyCat(A,cat) ) >> HasCat(A,cat),  weight : 1.0, squared: sq
-	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 0.0, squared: sq
-	//m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0, squared: sq
-}
+//for (int i = 0; i < numCategories; i++)  {
+//	UniqueID cat = data.getUniqueID(i)
+//m.add rule : ( ClassifyCat(A,cat) ) >> HasCat(A,cat),  weight : 1.0, squared: sq
+//	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 0.0, squared: sq
+//m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0, squared: sq
+//}
 
 m.add PredicateConstraint.PartialFunctional , on : HasCat
 
@@ -137,8 +143,8 @@ Partition groundTruth = new Partition(1)
 def inserter
 inserter = data.getInserter(Link, fullObserved)
 InserterUtils.loadDelimitedData(inserter, dataPath + linkFile)
-inserter = data.getInserter(Talk, fullObserved)
-InserterUtils.loadDelimitedData(inserter, dataPath + talkFile)
+//inserter = data.getInserter(Talk, fullObserved)
+//InserterUtils.loadDelimitedData(inserter, dataPath + talkFile)
 inserter = data.getInserter(HasCat, groundTruth)
 InserterUtils.loadDelimitedData(inserter, dataPath + labelFile)
 
@@ -165,7 +171,7 @@ keys.add(document)
 keys.add(linkedDocument)
 //queries.add(new DatabaseQuery(ClassifyCat(document,N).getFormula()))
 queries.add(new DatabaseQuery(Link(document, linkedDocument).getFormula()))
-queries.add(new DatabaseQuery(Talk(document, A).getFormula()))
+//queries.add(new DatabaseQuery(Talk(document, A).getFormula()))
 queries.add(new DatabaseQuery(HasCat(document, A).getFormula()))
 
 def partitionDocuments = new HashMap<Partition, Set<GroundTerm>>()
@@ -176,21 +182,21 @@ for (int i = 0; i < folds; i++) {
 
 	trainWritePartitions.add(i, new Partition(i + 2*folds + 2))
 	testWritePartitions.add(i, new Partition(i + 3*folds + 2))
-	
+
 	trainLabelPartitions.add(i, new Partition(i + 4*folds + 2))
 	testLabelPartitions.add(i, new Partition(i + 5*folds + 2))
 
 	Set<GroundTerm> [] documents = FoldUtils.generateRandomSplit(data, trainTestRatio,
 			fullObserved, groundTruth, trainReadPartitions.get(i),
-			testReadPartitions.get(i), trainLabelPartitions.get(i), 
+			testReadPartitions.get(i), trainLabelPartitions.get(i),
 			testLabelPartitions.get(i), queries, keys, filterRatio)
-//	Set<GroundTerm> [] documents = FoldUtils.generateSnowballSplit(data, fullObserved, groundTruth, 
-//		trainReadPartitions.get(i), testReadPartitions.get(i), trainLabelPartitions.get(i), 
-//		testLabelPartitions.get(i), queries, keys, targetSize, Link, explore)
-	
-	
-	
-	
+	//	Set<GroundTerm> [] documents = FoldUtils.generateSnowballSplit(data, fullObserved, groundTruth,
+	//		trainReadPartitions.get(i), testReadPartitions.get(i), trainLabelPartitions.get(i),
+	//		testLabelPartitions.get(i), queries, keys, targetSize, Link, explore)
+
+
+
+
 	partitionDocuments.put(trainReadPartitions.get(i), documents[0])
 	partitionDocuments.put(testReadPartitions.get(i), documents[1])
 
@@ -223,18 +229,19 @@ for (int fold = 0; fold < folds; fold++) {
 	nb.learn(nbTrainingKeys.get(fold), dataPath + labelFile, dataPath + wordFile)
 
 	inserter = data.getInserter(ClassifyCat, trainReadPartitions.get(fold))
-//	nb.insertAllPredictions(dataPath + wordFile, trainingKeys.get(fold), inserter)
+	//	nb.insertAllPredictions(dataPath + wordFile, trainingKeys.get(fold), inserter)
 	nb.insertAllProbabilities(dataPath + wordFile, trainingKeys.get(fold), inserter)
 	log.debug("training keys size {}", trainingKeys.get(fold).size())
-	
+
 	inserter = data.getInserter(ClassifyCat, testReadPartitions.get(fold))
-//	nb.insertAllPredictions(dataPath + wordFile, testingKeys.get(fold), inserter)
+	//	nb.insertAllPredictions(dataPath + wordFile, testingKeys.get(fold), inserter)
 	nb.insertAllProbabilities(dataPath + wordFile, testingKeys.get(fold), inserter)
 	log.debug("testing keys size {}", testingKeys.get(fold).size())
-	
 
-	Database trainDB = data.getDatabase(trainWritePartitions.get(fold), trainReadPartitions.get(fold))
-	Database testDB = data.getDatabase(testWritePartitions.get(fold), testReadPartitions.get(fold))
+	inserter = data.getInserter(Cat, trainReadPartitions.get(fold))
+	for (int i=0; i < numCategories; i++) inserter.insert(data.getUniqueID(i));
+	inserter = data.getInserter(Cat, testReadPartitions.get(fold))
+	for (int i=0; i < numCategories; i++) inserter.insert(data.getUniqueID(i));
 
 
 	/*
@@ -243,17 +250,35 @@ for (int fold = 0; fold < folds; fold++) {
 
 	def targetPredicates = [HasCat] as Set
 
-	DatabasePopulator dbPop = new DatabasePopulator(trainDB)
+	Map<Variable, Set<GroundTerm>> substitutions = new HashMap<Variable, Set<GroundTerm>>()
 	Variable Category = new Variable("Category")
 	Set<GroundTerm> categoryGroundings = new HashSet<GroundTerm>()
 	for (int i = 0; i <= numCategories; i++)
 		categoryGroundings.add(data.getUniqueID(i))
-
+	substitutions.put(Category, categoryGroundings)
 
 	Variable Document = new Variable("Document")
-	Map<Variable, Set<GroundTerm>> substitutions = new HashMap<Variable, Set<GroundTerm>>()
+	Database db = data.getDatabase(trainReadPartitions.get(fold));
+	DatabasePopulator dbPop = new DatabasePopulator(db);
 	substitutions.put(Document, partitionDocuments.get(trainReadPartitions.get(fold)))
-	substitutions.put(Category, categoryGroundings)
+	dbPop.populate(new QueryAtom(avgValue__1, Document, Category), substitutions)
+	db.close();
+	
+	db = data.getDatabase(testReadPartitions.get(fold));
+	dbPop = new DatabasePopulator(db);
+	substitutions.put(Document, partitionDocuments.get(testReadPartitions.get(fold)))
+	dbPop.populate(new QueryAtom(avgValue__1, Document, Category), substitutions)
+	db.close();
+	
+	/* open databases */
+
+	toClose = [Link, ClassifyCat, Cat] as Set;
+	Database trainDB = data.getDatabase(trainWritePartitions.get(fold), toClose, trainReadPartitions.get(fold))
+	Database testDB = data.getDatabase(testWritePartitions.get(fold), toClose, testReadPartitions.get(fold))
+
+
+	dbPop = new DatabasePopulator(trainDB)
+	substitutions.put(Document, partitionDocuments.get(trainReadPartitions.get(fold)))
 	dbPop.populate(new QueryAtom(HasCat, Document, Category), substitutions)
 
 	/**
@@ -261,11 +286,8 @@ for (int fold = 0; fold < folds; fold++) {
 	 */
 
 	dbPop = new DatabasePopulator(testDB)
-	substitutions.clear()
 	substitutions.put(Document, partitionDocuments.get(testReadPartitions.get(fold)))
-	substitutions.put(Category, categoryGroundings)
 	dbPop.populate(new QueryAtom(HasCat, Document, Category), substitutions)
-
 
 
 	Database labelsDB = data.getDatabase(trainLabelPartitions.get(fold), targetPredicates)
@@ -274,13 +296,13 @@ for (int fold = 0; fold < folds; fold++) {
 	Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
 	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 		weights.put(k, k.getWeight());
-		
-	def groundTruthDB = data.getDatabase(testLabelPartitions.get(fold), [HasCat] as Set)
+
+	def groundTruthDB = data.getDatabase(testLabelPartitions.get(fold), targetPredicates)
 	DataOutputter.outputPredicate("output/graph/groundTruth" + fold + ".node" , groundTruthDB, HasCat, ",", false, "nodeid,label")
 	groundTruthDB.close()
-	
+
 	DataOutputter.outputPredicate("output/graph/groundTruth" + fold + ".directed" , testDB, Link, ",", false, null)
-	
+
 	for (String method : methods) {
 		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 			k.setWeight(weights.get(k))
@@ -318,9 +340,9 @@ for (int fold = 0; fold < folds; fold++) {
 				DiscretePredictionStatistics.BinaryClass.POSITIVE))
 
 		results.get(method).add(fold, stats)
-	
+
 		DataOutputter.outputClassificationPredictions("output/" + method + fold + ".csv", testDB, HasCat, ",")
-		
+
 		groundTruthDB.close()
 	}
 	trainDB.close()
@@ -333,8 +355,8 @@ for (String method : methods) {
 		def b = DiscretePredictionStatistics.BinaryClass.POSITIVE
 		System.out.println("Method " + method + ", fold " + fold +", acc " + stats.getAccuracy() +
 				", prec " + stats.getPrecision(b) + ", rec " + stats.getRecall(b) +
-				", F1 " + stats.getF1(b) + ", correct " + stats.getCorrectAtoms().size() + 
-			", tp " + stats.tp + ", fp " + stats.fp + ", tn " + stats.tn + ", fn " + stats.fn)
+				", F1 " + stats.getF1(b) + ", correct " + stats.getCorrectAtoms().size() +
+				", tp " + stats.tp + ", fp " + stats.fp + ", tn " + stats.tn + ", fn " + stats.fn)
 	}
 }
 

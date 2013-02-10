@@ -262,7 +262,7 @@ public class NaiveBayesUtil {
 
 					for (Map.Entry<Integer, Double> e : probs.entrySet()) {
 						inserter.insertValue(e.getValue(), docID, e.getKey());
-						log.trace("NB predicts p={} for {}", e.getValue(), e.getKey());
+						//log.trace("NB predicts p={} for {}", e.getValue(), e.getKey());
 					}
 					count++;
 				}
