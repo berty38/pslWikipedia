@@ -57,7 +57,7 @@ import com.google.common.collect.Iterables;
 //methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
 methods = ["None"]
 //methods = ["MPLE", "NONE", "MLE", "MM1", "MM10"]
-//methods = ["MM1", "NB"]
+methods = ["None", "MLE"]
 
 
 /**
@@ -84,7 +84,7 @@ talkFile = "talk.txt"
 //talkFile = "talk.txt"
 sq = false
 Random rand = new Random(0)
-double trainingObservedRatio = 0.5 // ratio of training set for training NB
+double trainingObservedRatio = 0.2 // ratio of training set for training NB
 folds = 1 // number of folds
 trainTestRatio = 0.5 // ratio of train to test splits (random)
 filterRatio = 1.0 // ratio of documents to keep (throw away the rest)
@@ -116,18 +116,20 @@ m.add setcomparison: "avgValue", on: HasCat, using: SetComparison.Average
 //prior
 m.add rule : ~(HasCat(A,N)), weight: 0.001, squared: sq
 
+avgValue({D.Link}, {L})
 m.add rule : ( ClassifyCat(D,C) ) >> HasCat(D,C),  weight : 1.0, squared: sq
+m.add rule : ( avgValue__1(D, L)) >> HasCat(D,L), weight : 1.0, squared: sq
+for (int i = 0; i < numCategories; i++)  {
+	UniqueID cat = data.getUniqueID(i)
+//	m.add rule : ( avgValue__1(D, cat)) >> HasCat(D,cat), weight : 1.0, squared: sq
+}
 //m.add rule : ( HasCat(D,C) ) >> ClassifyCat(D,C), weight : 1.0, squared : sq
-m.add rule : ( avgValue({D.Link}, {L})) >> HasCat(D,L), weight : 1.0, squared: sq
 //m.add rule : ( HasCat(D,C) ) >> (avgValue({D.Link}, {C})), weight : 1.0, squared: sq
 //m.add rule : ( HasCat(A,C) & Link(A,B) & (A - B)) >> HasCat(B,C), weight: 0.0, squared: sq
 //m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,C) & (E - D) & (E ^ D) ) >> HasCat(D,C), weight: 1.0, squared: sq
-//for (int i = 0; i < numCategories; i++)  {
-//	UniqueID cat = data.getUniqueID(i)
 //m.add rule : ( ClassifyCat(A,cat) ) >> HasCat(A,cat),  weight : 1.0, squared: sq
 //	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 0.0, squared: sq
 //m.add rule : ( Talk(D,A) & Talk(E,A) & HasCat(E,cat) & (E - D) ) >> HasCat(D,cat), weight: 1.0, squared: sq
-//}
 
 m.add PredicateConstraint.PartialFunctional , on : HasCat
 
@@ -258,18 +260,29 @@ for (int fold = 0; fold < folds; fold++) {
 	substitutions.put(Category, categoryGroundings)
 
 	Variable Document = new Variable("Document")
-	Database db = data.getDatabase(trainReadPartitions.get(fold));
+	Database db = data.getDatabase(trainWritePartitions.get(fold));
 	DatabasePopulator dbPop = new DatabasePopulator(db);
 	substitutions.put(Document, partitionDocuments.get(trainReadPartitions.get(fold)))
 	dbPop.populate(new QueryAtom(avgValue__1, Document, Category), substitutions)
 	db.close();
-	
-	db = data.getDatabase(testReadPartitions.get(fold));
+
+	db = data.getDatabase(testWritePartitions.get(fold));
 	dbPop = new DatabasePopulator(db);
 	substitutions.put(Document, partitionDocuments.get(testReadPartitions.get(fold)))
 	dbPop.populate(new QueryAtom(avgValue__1, Document, Category), substitutions)
 	db.close();
-	
+
+	/* insert ground truth aggregates into training label */
+	db = data.getDatabase(trainLabelPartitions.get(fold), [HasCat] as Set, trainReadPartitions.get(fold))
+	substitutions.put(Document, partitionDocuments.get(trainReadPartitions.get(fold)))
+	dbPop = new DatabasePopulator(db);
+	dbPop.populate(new QueryAtom(avgValue__1, Document, Category), substitutions)
+	ConfigBundle tightEqualityConfig = cm.getBundle("wiki");
+	tightEqualityConfig.setProperty("admmreasoner.epsilonrel", 1e-16)
+	MPEInference aggregateComputer = new MPEInference(m, db, tightEqualityConfig)
+	aggregateComputer.mpeInference()
+	db.close()
+
 	/* open databases */
 
 	toClose = [Link, ClassifyCat, Cat] as Set;
@@ -290,7 +303,7 @@ for (int fold = 0; fold < folds; fold++) {
 	dbPop.populate(new QueryAtom(HasCat, Document, Category), substitutions)
 
 
-	Database labelsDB = data.getDatabase(trainLabelPartitions.get(fold), targetPredicates)
+	Database labelsDB = data.getDatabase(trainLabelPartitions.get(fold), [HasCat, avgValue__1] as Set)
 
 	// get all default weights
 	Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
