@@ -8,14 +8,16 @@ import com.google.common.collect.Iterables
 import edu.umd.cs.psl.application.inference.MPEInference
 import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxLikelihoodMPE
 import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxPseudoLikelihood
-import edu.umd.cs.psl.application.learning.weight.maxlikelihood.VotedPerceptron;
+import edu.umd.cs.psl.application.learning.weight.maxlikelihood.VotedPerceptron
 import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin
 import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin.LossBalancingType
-import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin.NormScalingType;
+import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin.NormScalingType
 import edu.umd.cs.psl.application.learning.weight.random.FirstOrderMetropolisRandOM
-import edu.umd.cs.psl.application.learning.weight.random.HardEMRandOM
-import edu.umd.cs.psl.application.learning.weight.random.IncompatibilityMetropolisRandOM;
-import edu.umd.cs.psl.application.learning.weight.random.MetropolisRandOM;
+import edu.umd.cs.psl.application.learning.weight.random.GroundIncompatibilityMetropolisRandOM;
+import edu.umd.cs.psl.application.learning.weight.random.GroundMetropolisRandOM
+import edu.umd.cs.psl.application.learning.weight.random.HardEMRandOM2
+import edu.umd.cs.psl.application.learning.weight.random.IncompatibilityMetropolisRandOM
+import edu.umd.cs.psl.application.learning.weight.random.MetropolisRandOM
 import edu.umd.cs.psl.config.*
 import edu.umd.cs.psl.core.*
 import edu.umd.cs.psl.core.inference.*
@@ -51,27 +53,34 @@ import edu.umd.cs.psl.util.database.Queries
  * "MM" (MaxMargin)
  * "FirstOrderRandOM" (FirstOrderMetropolisRandOM)
  * "IncompatibilityRandOM" (IncompatibilityMetropolisRandOM)
+ * "GroundRandOM" (GroundMetropolisRandOM)
  */
-methods = ["MLE"];
+methods = ["FirstOrderRandOM"];
 
 /* MLE/MPLE options */
-vpStepCounts = [10]
-vpStepSizes = [10]
+vpStepCounts = [200]
+vpStepSizes = [5]
 
 /* MM options */
-slackPenalties = [1, 10, 100]
-lossBalancings = [LossBalancingType.NONE, LossBalancingType.CLASS_WEIGHTS, LossBalancingType.INVERSE_CLASS_WEIGHTS]
-normScalings = [NormScalingType.NONE, NormScalingType.NUM_GROUNDINGS, NormScalingType.INVERSE_NUM_GROUNDINGS]
+slackPenalties = [1]
+lossBalancings = [LossBalancingType.NONE]
+normScalings = [NormScalingType.NONE]
+//slackPenalties = [1, 10, 100]
+//lossBalancings = [LossBalancingType.NONE, LossBalancingType.CLASS_WEIGHTS, LossBalancingType.INVERSE_CLASS_WEIGHTS]
+//normScalings = [NormScalingType.NONE, NormScalingType.NUM_GROUNDINGS, NormScalingType.INVERSE_NUM_GROUNDINGS]
 
 /* Metropolis RandOM options */
-// TODO
+sampleCounts = [500]
+burnInFractions = [0.1]
+maxIters = [25]
+obsvScales = [1]
 
 Logger log = LoggerFactory.getLogger(this.class)
 
 ConfigManager cm = ConfigManager.getManager()
 ConfigBundle baseConfig = cm.getBundle("epinions")
 
-boolean sq = false
+boolean sq = true
 
 /*
  * DEFINES EXPERIMENT CONFIGURATIONS
@@ -101,30 +110,43 @@ for (String method : methods) {
 					newBundle.addProperty(MaxMargin.SLACK_PENALTY_KEY, slackPenalty);
 					newBundle.addProperty(MaxMargin.BALANCE_LOSS_KEY, lossBalancing);
 					newBundle.addProperty(MaxMargin.SCALE_NORM_KEY, normScaling);
-					methodName = ((sq) ? "quad" : "linear") + "-mm-" + slackPenalty + "-" + lossBalancing.name().toLowerCase()
-							+ "-" + normScaling.name().toLowerCase();
+					methodName = ((sq) ? "quad" : "linear") + "-mm-" + slackPenalty + "-" + lossBalancing.name().toLowerCase() + "-" + normScaling.name().toLowerCase();
 					methodNames.add(methodName);
 					methodConfigs.add(newBundle);
 				}
 			}
 		}
 	}
-	else if (method.equals("FirstOrderRandOM") || method.equals("IncompatibilityRandOM")) {
+	else if (method.equals("FirstOrderRandOM") || method.equals("IncompatibilityRandOM") || method.equals("GroundRandOM")) {
+		for (int numSamples : sampleCounts) {
+			for (double burnInFraction : burnInFractions) {
+				burnIn = Math.round(numSamples * burnInFraction);
+				for (int maxIter : maxIters) {
+					for (double obsvScale : obsvScales) {
+						ConfigBundle newBundle = cm.getBundle("epinions");
+						newBundle.addProperty("method", method);
+						newBundle.addProperty(GroundMetropolisRandOM.PROPOSAL_VARIANCE, 0.00005);
+						newBundle.addProperty(MetropolisRandOM.INITIAL_VARIANCE_KEY, 1);
+						newBundle.addProperty(MetropolisRandOM.CHANGE_THRESHOLD_KEY, 0.001);
+						newBundle.addProperty(MetropolisRandOM.NUM_SAMPLES_KEY, numSamples);
+						newBundle.addProperty(MetropolisRandOM.BURN_IN_KEY, burnIn);
+						newBundle.addProperty(MetropolisRandOM.MAX_ITER_KEY, maxIter);
+						newBundle.addProperty(MetropolisRandOM.OBSERVATION_DENSITY_SCALE_KEY, obsvScale);
+						methodName = ((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + numSamples + "-" + burnIn + "-" + maxIter + "-" + obsvScale;
+						methodNames.add(methodName);
+						methodConfigs.add(newBundle);
+					}
+				}
+			}
+		}
+	}
+	else {
 		ConfigBundle newBundle = cm.getBundle("epinions");
 		newBundle.addProperty("method", method);
-		numSamples = 75
-		burnIn = 20
-		maxIter = 30;
-		newBundle.addProperty(MetropolisRandOM.NUM_SAMPLES_KEY, numSamples);
-		newBundle.addProperty(MetropolisRandOM.BURN_IN_KEY, burnIn);
-		newBundle.addProperty(MetropolisRandOM.MAX_ITER_KEY, maxIter);
-		methodName = ((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + numSamples + "-" + burnIn
-				+ "-" + maxIter;
+		methodName = ((sq) ? "quad" : "linear") + "-" + method.toLowerCase();
 		methodNames.add(methodName);
 		methodConfigs.add(newBundle);
 	}
-	else
-		throw new IllegalArgumentException("Unrecognized method: " + method);
 }
 
 /*
@@ -150,35 +172,37 @@ m.add predicate: "knows", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "trusts", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "prior", types: [ArgumentType.UniqueID]
 
-m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: 1.0, squared: sq   //FFpp
-m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: 1.0, squared: sq //FFpm
-m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & ~trusts(A,B) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: 1.0, squared: sq //FFmp
-m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & ~trusts(A,B) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: 1.0, squared: sq //FFmm
+double initialWeight = 10
 
-m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & trusts(A,B) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq  //FBpp
-m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & trusts(A,B) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //FBpm
-m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & ~trusts(A,B) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //FBmp
-m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & ~trusts(A,B) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq //FBmm
+m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: initialWeight, squared: sq   //FFpp
+m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: initialWeight, squared: sq //FFpm
+m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & ~trusts(A,B) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: initialWeight, squared: sq //FFmp
+m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & ~trusts(A,B) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: initialWeight, squared: sq //FFmm
 
-m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & trusts(B,A) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq   //BFpp
-m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & trusts(B,A) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //BFpm
-m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & ~trusts(B,A) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //BFmp
-m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & ~trusts(B,A) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq //BFmm
+m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & trusts(A,B) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: initialWeight, squared: sq  //FBpp
+m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & trusts(A,B) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: initialWeight, squared: sq //FBpm
+m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & ~trusts(A,B) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: initialWeight, squared: sq //FBmp
+m.add rule: (knows(A,B) & knows(C,B) & knows(A,C) & ~trusts(A,B) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: initialWeight, squared: sq //FBmm
 
-m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & trusts(B,A) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq   //BBpp
-m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & trusts(B,A) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //BBpm
-m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & ~trusts(B,A) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight:1.0, squared: sq //BBmp
-m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & ~trusts(B,A) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight:1.0, squared: sq //BBmm
+m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & trusts(B,A) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: initialWeight, squared: sq   //BFpp
+m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & trusts(B,A) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: initialWeight, squared: sq //BFpm
+m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & ~trusts(B,A) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: initialWeight, squared: sq //BFmp
+m.add rule: (knows(B,A) & knows(B,C) & knows(A,C) & ~trusts(B,A) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: initialWeight, squared: sq //BFmm
 
-m.add rule: (knows(A,B) & knows(B,A) & trusts(A,B)) >> trusts(B,A), weight: 1.0, squared: sq
-m.add rule: (knows(A,B) & knows(B,A) & ~trusts(A,B)) >> ~trusts(B,A), weight: 1.0, squared: sq
+m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & trusts(B,A) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: initialWeight, squared: sq   //BBpp
+m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & trusts(B,A) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: initialWeight, squared: sq //BBpm
+m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & ~trusts(B,A) & trusts(C,B) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: initialWeight, squared: sq //BBmp
+m.add rule: (knows(B,A) & knows(C,B) & knows(A,C) & ~trusts(B,A) & ~trusts(C,B) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: initialWeight, squared: sq //BBmm
+
+m.add rule: (knows(A,B) & knows(B,A) & trusts(A,B)) >> trusts(B,A), weight: initialWeight, squared: sq
+m.add rule: (knows(A,B) & knows(B,A) & ~trusts(A,B)) >> ~trusts(B,A), weight: initialWeight, squared: sq
 
 // two-sided prior
 UniqueID constant = data.getUniqueID(0)
-m.add rule: (knows(A,B) & prior(constant)) >> trusts(A,B), weight: 1.0, squared: sq
-m.add rule: (knows(A,B) & trusts(A,B)) >> prior(constant), weight: 1.0, squared: sq
+m.add rule: (knows(A,B) & prior(constant)) >> trusts(A,B), weight: initialWeight, squared: sq
+m.add rule: (knows(A,B) & trusts(A,B)) >> prior(constant), weight: initialWeight, squared: sq
 
-// save all default weights
+// save all initial weights
 Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
 for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 	weights.put(k, k.getWeight());
@@ -298,11 +322,13 @@ for (int fold = 0; fold < folds; fold++) {
 		GroundAtom atom = trainDB.getAtom(trusts, grounding)
 		if (atom instanceof RandomVariableAtom) {
 			rv++
+//			atom.setValue(0.5);
 			trainDB.commit((RandomVariableAtom) atom);
 		} else
 			ob++
 	}
 	System.out.println("Saw " + rv + " rvs and " + ob + " obs")
+//	DataOutputter.outputPredicate("output/epinions/training-truth" + fold + ".directed" , labelsDB, trusts, ",", true, "Source,Target,TrueTrusts");
 
 	/*
 	 * POPULATE TEST DATABASE
@@ -321,6 +347,8 @@ for (int fold = 0; fold < folds; fold++) {
 	Partition dummy = new Partition(99999)
 	Partition dummy2 = new Partition(19999)
 	Database labelsDB = data.getDatabase(dummy, [trusts] as Set, trainLabelPartition)
+	
+//	DataOutputter.outputPredicate("output/epinions/training-truth" + fold + ".directed" , labelsDB, trusts, ",", true, "Source,Target,TrueTrusts");
 
 	for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
@@ -425,17 +453,22 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 			mm.learn()
 			break
 		case "HEMRandOM":
-			HardEMRandOM hardRandOM = new HardEMRandOM(m, db, labelsDB, config)
-			hardRandOM.setSlackPenalty(10000)
-		//hardRandOM.learn()
+			HardEMRandOM2 hardRandOM = new HardEMRandOM2(m, db, labelsDB, config)
+//			hardRandOM.setSlackPenalty(10000)
+			hardRandOM.learn()
 			break
 		case "FirstOrderRandOM":
 			FirstOrderMetropolisRandOM randOM = new FirstOrderMetropolisRandOM(m, db, labelsDB, config)
 			randOM.learn()
 			break
 		case "IncompatibilityRandOM":
+//			GroundIncompatibilityMetropolisRandOM randOM = new GroundIncompatibilityMetropolisRandOM(m, db, labelsDB, config);
 			IncompatibilityMetropolisRandOM randOM = new IncompatibilityMetropolisRandOM(m, db, labelsDB, config);
 			randOM.learn();
+			break
+		case "GroundRandOM":
+			GroundMetropolisRandOM randOM = new GroundMetropolisRandOM(m, db, labelsDB, config)
+			randOM.learn()
 			break
 		default:
 			throw new IllegalArgumentException("Unrecognized method.");

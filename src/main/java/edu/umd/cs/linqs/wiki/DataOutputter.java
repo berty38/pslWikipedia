@@ -35,7 +35,7 @@ public class DataOutputter {
 						bw.write(delimiter);
 				}
 				if (printTruth)
-					bw.write(atom.getValue() + "\n");
+					bw.write(delimiter + atom.getValue() + "\n");
 				else
 					bw.write("\n");
 			}
