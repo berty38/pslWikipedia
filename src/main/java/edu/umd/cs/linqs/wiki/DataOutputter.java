@@ -1,6 +1,7 @@
 package edu.umd.cs.linqs.wiki;
 
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -22,7 +23,10 @@ public class DataOutputter {
 		Set<GroundAtom> groundings = Queries.getAllAtoms(db, p);
 		
 		try {
-			FileWriter fw = new FileWriter(filename);
+			File file = new File(filename);
+			if (file.getParentFile() != null)
+				file.getParentFile().mkdirs();
+			FileWriter fw = new FileWriter(file);
 			BufferedWriter bw = new BufferedWriter(fw);
 
 			if (header != null)

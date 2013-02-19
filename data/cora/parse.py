@@ -31,7 +31,7 @@ while line != '':
 	line = f.readline()
 f.close()
 
-f = open('{}.label'.format(fpfx),'w')
+f = open('{}.labels'.format(fpfx),'w')
 for id in haslabel:
 	f.write('{}\t{}\n'.format(id,haslabel[id]))
 f.close()
