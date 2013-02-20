@@ -1,19 +1,14 @@
 package edu.umd.cs.linqs.wiki
 
-import java.lang.annotation.Documented;
-import java.util.Set;
-
-import junit.framework.TestResult;
-
-import org.eclipse.jdt.internal.core.util.LRUCache.Stats;
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import edu.emory.mathcs.utils.ConcurrencyUtils
+import com.google.common.collect.Iterables
+
 import edu.umd.cs.psl.application.inference.MPEInference
 import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxLikelihoodMPE
-import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin
 import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxPseudoLikelihood
+import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin
 import edu.umd.cs.psl.application.learning.weight.random.FirstOrderMetropolisRandOM
 import edu.umd.cs.psl.application.learning.weight.random.HardEMRandOM
 import edu.umd.cs.psl.config.*
@@ -24,38 +19,31 @@ import edu.umd.cs.psl.database.Database
 import edu.umd.cs.psl.database.DatabasePopulator
 import edu.umd.cs.psl.database.DatabaseQuery
 import edu.umd.cs.psl.database.Partition
-import edu.umd.cs.psl.database.ResultList
 import edu.umd.cs.psl.database.rdbms.RDBMSDataStore
 import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver
 import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver.Type
 import edu.umd.cs.psl.evaluation.result.*
 import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionComparator
 import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionStatistics
-import edu.umd.cs.psl.evaluation.statistics.RankingScore
-import edu.umd.cs.psl.evaluation.statistics.SimpleRankingComparator
 import edu.umd.cs.psl.evaluation.statistics.filter.MaxValueFilter
 import edu.umd.cs.psl.groovy.*
-import edu.umd.cs.psl.model.Model;
+import edu.umd.cs.psl.model.Model
 import edu.umd.cs.psl.model.argument.ArgumentType
 import edu.umd.cs.psl.model.argument.GroundTerm
 import edu.umd.cs.psl.model.argument.UniqueID
 import edu.umd.cs.psl.model.argument.Variable
 import edu.umd.cs.psl.model.atom.GroundAtom
 import edu.umd.cs.psl.model.atom.QueryAtom
-import edu.umd.cs.psl.model.atom.RandomVariableAtom;
-import edu.umd.cs.psl.model.function.AttributeSimilarityFunction
+import edu.umd.cs.psl.model.atom.RandomVariableAtom
+import edu.umd.cs.psl.model.kernel.CompatibilityKernel
+import edu.umd.cs.psl.model.parameters.PositiveWeight
+import edu.umd.cs.psl.model.parameters.Weight
 import edu.umd.cs.psl.ui.loading.*
 import edu.umd.cs.psl.util.database.Queries
-import edu.umd.cs.psl.model.kernel.CompatibilityKernel;
-import edu.umd.cs.psl.model.parameters.PositiveWeight;
-import edu.umd.cs.psl.model.parameters.Weight
-import edu.umd.cs.psl.model.predicate.Predicate;
-
-import com.google.common.collect.Iterables;
 
 //methods = ["RandOM", "MM1", "MM10", "MM100", "MM1000", "MLE"]
 //methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
-methods = ["None","MPLE"]
+methods = ["None","MLE","MPLE"]
 
 
 /**
@@ -68,8 +56,9 @@ wordFile = "cora.words"
 labelFile = "cora.labels"
 linkFile = "cora.links"
 sq = true
+usePerCatRules = true
 Random rand = new Random(0)
-double trainingObservedRatio = 0.25 // ratio of training set for training NB
+double trainingObservedRatio = 0.5 // ratio of training set for training NB
 folds = 1 // number of folds
 trainTestRatio = 0.9 // ratio of train to test splits (random)
 filterRatio = 1.0 // ratio of documents to keep (throw away the rest)
@@ -105,16 +94,20 @@ m.add rule : ~(HasCat(A,N)), weight: 0.001, squared: sq
 avgValue({D.Link}, {L})
 // NB features
 m.add rule : ( ClassifyCat(D,C) ) >> HasCat(D,C),  weight : 1.0, squared: sq
-// neighbor has cat => has cat 
-m.add rule : ( HasCat(A,C) & Link(A,B) & (A - B)) >> HasCat(B,C), weight: 1.0, squared: sq
-// percent neighbors have cat => has cat (combats flooding due to high degree?)
-//m.add rule : ( avgValue__1(D, L)) >> HasCat(D,L), weight : 1.0, squared: sq
 // per-cat rules
-//for (int i = 0; i < numCategories; i++)  {
-//	UniqueID cat = data.getUniqueID(i)
-//	m.add rule : ( avgValue__1(D, cat)) >> HasCat(D,cat), weight : 1.0, squared: sq
-//	m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 0.0, squared: sq
-//}
+if (usePerCatRules) {
+	for (int i = 0; i < numCategories; i++)  {
+		UniqueID cat = data.getUniqueID(i+1)
+		m.add rule : ( HasCat(B, cat) & Link(A,B)) >> HasCat(A, cat), weight: 1.0, squared: sq
+	//	m.add rule : ( avgValue__1(D, cat)) >> HasCat(D,cat), weight : 1.0, squared: sq
+	}
+}
+else {
+	// neighbor has cat => has cat
+	m.add rule : ( HasCat(A,C) & Link(A,B) & (A - B)) >> HasCat(B,C), weight: 1.0, squared: sq
+	// percent neighbors have cat => has cat (combats flooding due to high degree?)
+	//m.add rule : ( avgValue__1(D, L)) >> HasCat(D,L), weight : 1.0, squared: sq
+}
 
 // ensure that HasCat sums to 1
 m.add PredicateConstraint.PartialFunctional , on : HasCat
