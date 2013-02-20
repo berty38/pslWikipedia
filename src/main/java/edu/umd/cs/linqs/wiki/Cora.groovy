@@ -69,7 +69,7 @@ labelFile = "cora.labels"
 linkFile = "cora.links"
 sq = true
 Random rand = new Random(0)
-double trainingObservedRatio = 0.5 // ratio of training set for training NB
+double trainingObservedRatio = 0.25 // ratio of training set for training NB
 folds = 1 // number of folds
 trainTestRatio = 0.9 // ratio of train to test splits (random)
 filterRatio = 1.0 // ratio of documents to keep (throw away the rest)
@@ -108,7 +108,7 @@ m.add rule : ( ClassifyCat(D,C) ) >> HasCat(D,C),  weight : 1.0, squared: sq
 // neighbor has cat => has cat 
 m.add rule : ( HasCat(A,C) & Link(A,B) & (A - B)) >> HasCat(B,C), weight: 1.0, squared: sq
 // percent neighbors have cat => has cat (combats flooding due to high degree?)
-m.add rule : ( avgValue__1(D, L)) >> HasCat(D,L), weight : 1.0, squared: sq
+//m.add rule : ( avgValue__1(D, L)) >> HasCat(D,L), weight : 1.0, squared: sq
 // per-cat rules
 //for (int i = 0; i < numCategories; i++)  {
 //	UniqueID cat = data.getUniqueID(i)
