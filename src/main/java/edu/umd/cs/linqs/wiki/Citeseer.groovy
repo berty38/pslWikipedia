@@ -69,11 +69,11 @@ explore = 0.001 // prob of random node in snowball sampler
 Logger log = LoggerFactory.getLogger(this.class)
 
 ConfigManager cm = ConfigManager.getManager()
-ConfigBundle citeseerBundle = cm.getBundle("citeseer")
+ConfigBundle cb = cm.getBundle("citeseer")
 
 def defaultPath = System.getProperty("java.io.tmpdir")
-String dbpath = citeseerBundle.getString("dbpath", defaultPath + File.separator + "psl")
-DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), citeseerBundle)
+String dbpath = cb.getString("dbpath", defaultPath + File.separator + "psl")
+DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), cb)
 
 /*
  * DEFINE MODEL
@@ -312,7 +312,7 @@ for (int fold = 0; fold < folds; fold++) {
 		/*
 		 * Weight learning
 		 */
-		learn(m, trainDB, labelsDB, citeseerBundle, method, log)
+		learn(m, trainDB, labelsDB, cb, method, log)
 
 		System.out.println("Learned model " + method + "\n" + m.toString())
 
@@ -322,7 +322,7 @@ for (int fold = 0; fold < folds; fold++) {
 		Set<GroundAtom> allAtoms = Queries.getAllAtoms(testDB, HasCat)
 		for (RandomVariableAtom atom : Iterables.filter(allAtoms, RandomVariableAtom))
 			atom.setValue(0.0)
-		MPEInference mpe = new MPEInference(m, testDB, citeseerBundle)
+		MPEInference mpe = new MPEInference(m, testDB, cb)
 		FullInferenceResult result = mpe.mpeInference()
 		System.out.println("Objective: " + result.getTotalWeightedIncompatibility())
 
