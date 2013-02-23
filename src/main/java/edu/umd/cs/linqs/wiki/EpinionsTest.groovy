@@ -70,7 +70,7 @@ configGenerator.setVotedPerceptronStepSizes([(double) 1.0, (double) 2.0, (double
 /* MM options */
 configGenerator.setMaxMarginSlackPenalties([(double) 0.1, (double) 0.5, (double) 1.0]);
 configGenerator.setMaxMarginLossBalancingTypes([LossBalancingType.NONE]);
-configGenerator.setMaxMarginSlackPenalties([NormScalingType.NONE]);
+configGenerator.setMaxMarginNormScalingTypes([NormScalingType.NONE]);
 configGenerator.setMaxMarginSquaredSlackValues([false, true]);
 
 Logger log = LoggerFactory.getLogger(this.class)
