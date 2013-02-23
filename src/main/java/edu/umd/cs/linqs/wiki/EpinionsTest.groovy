@@ -42,6 +42,17 @@ import edu.umd.cs.psl.ui.loading.*
 import edu.umd.cs.psl.util.database.Queries
 
 
+ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("epinions");
+
+/*
+ * SET MODEL TYPES
+ * 
+ * Options:
+ * "quad" HLEF
+ * "bool" MLN
+ */
+configGenerator.setModelTypes(["quad", "bool"]);
+
 /*
  * SET LEARNING ALGORITHMS
  * 
@@ -49,113 +60,36 @@ import edu.umd.cs.psl.util.database.Queries
  * "MLE" (MaxLikelihoodMPE)
  * "MPLE" (MaxPseudoLikelihood)
  * "MM" (MaxMargin)
- * "FirstOrderRandOM" (FirstOrderMetropolisRandOM)
- * "IncompatibilityRandOM" (IncompatibilityMetropolisRandOM)
- * "GroundRandOM" (GroundMetropolisRandOM)
  */
-methods = ["FirstOrderRandOM"];
+configGenerator.setLearningMethods(["MLE", "MPLE", "MM"]);
 
 /* MLE/MPLE options */
-vpStepCounts = [200]
-vpStepSizes = [5]
+configGenerator.setVotedPerceptronStepCounts([5]);
+configGenerator.setVotedPerceptronStepSizes([(double) 1.0]);
 
 /* MM options */
-slackPenalties = [1]
-lossBalancings = [LossBalancingType.NONE]
-normScalings = [NormScalingType.NONE]
-//slackPenalties = [1, 10, 100]
-//lossBalancings = [LossBalancingType.NONE, LossBalancingType.CLASS_WEIGHTS, LossBalancingType.INVERSE_CLASS_WEIGHTS]
-//normScalings = [NormScalingType.NONE, NormScalingType.NUM_GROUNDINGS, NormScalingType.INVERSE_NUM_GROUNDINGS]
-
-/* Metropolis RandOM options */
-sampleCounts = [500]
-burnInFractions = [0.1]
-maxIters = [25]
-obsvScales = [1]
+configGenerator.setMaxMarginSlackPenalties([(double) 1.0]);
+configGenerator.setMaxMarginLossBalancingTypes([LossBalancingType.NONE]);
+configGenerator.setMaxMarginSlackPenalties([NormScalingType.NONE]);
+configGenerator.setMaxMarginSquaredSlackValues([false]);
 
 Logger log = LoggerFactory.getLogger(this.class)
 
-ConfigManager cm = ConfigManager.getManager()
-ConfigBundle baseConfig = cm.getBundle("epinions")
-
 boolean sq = true
 
-/*
- * DEFINES EXPERIMENT CONFIGURATIONS
- */
-List<String> methodNames = new ArrayList<String>();
-List<ConfigBundle> methodConfigs = new ArrayList<ConfigBundle>();
-for (String method : methods) {
-	if (method.equals("MLE") || method.equals("MPLE")) {
-		for (int vpStepCount : vpStepCounts) {
-			for (double vpStepSize : vpStepSizes) {
-				ConfigBundle newBundle = cm.getBundle("epinions");
-				newBundle.addProperty("method", method);
-				newBundle.addProperty(VotedPerceptron.NUM_STEPS_KEY, vpStepCount);
-				newBundle.addProperty(VotedPerceptron.STEP_SIZE_KEY, vpStepSize);
-				methodName = ((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + vpStepCount + "-" + vpStepSize;
-				methodNames.add(methodName);
-				methodConfigs.add(newBundle);
-			}
-		}
-	}
-	else if (method.equals("MM")) {
-		for (double slackPenalty : slackPenalties) {
-			for (LossBalancingType lossBalancing : lossBalancings) {
-				for (NormScalingType normScaling : normScalings) {
-					ConfigBundle newBundle = cm.getBundle("epinions");
-					newBundle.addProperty("method", method);
-					newBundle.addProperty(MaxMargin.SLACK_PENALTY_KEY, slackPenalty);
-					newBundle.addProperty(MaxMargin.BALANCE_LOSS_KEY, lossBalancing);
-					newBundle.addProperty(MaxMargin.SCALE_NORM_KEY, normScaling);
-					methodName = ((sq) ? "quad" : "linear") + "-mm-" + slackPenalty + "-" + lossBalancing.name().toLowerCase() + "-" + normScaling.name().toLowerCase();
-					methodNames.add(methodName);
-					methodConfigs.add(newBundle);
-				}
-			}
-		}
-	}
-	else if (method.equals("FirstOrderRandOM") || method.equals("IncompatibilityRandOM") || method.equals("GroundRandOM")) {
-		for (int numSamples : sampleCounts) {
-			for (double burnInFraction : burnInFractions) {
-				burnIn = Math.round(numSamples * burnInFraction);
-				for (int maxIter : maxIters) {
-					for (double obsvScale : obsvScales) {
-						ConfigBundle newBundle = cm.getBundle("epinions");
-						newBundle.addProperty("method", method);
-						newBundle.addProperty(GroundMetropolisRandOM.PROPOSAL_VARIANCE, 0.00005);
-						newBundle.addProperty(MetropolisRandOM.INITIAL_VARIANCE_KEY, 1);
-						newBundle.addProperty(MetropolisRandOM.CHANGE_THRESHOLD_KEY, 0.001);
-						newBundle.addProperty(MetropolisRandOM.NUM_SAMPLES_KEY, numSamples);
-						newBundle.addProperty(MetropolisRandOM.BURN_IN_KEY, burnIn);
-						newBundle.addProperty(MetropolisRandOM.MAX_ITER_KEY, maxIter);
-						newBundle.addProperty(MetropolisRandOM.OBSERVATION_DENSITY_SCALE_KEY, obsvScale);
-						methodName = ((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + numSamples + "-" + burnIn + "-" + maxIter + "-" + obsvScale;
-						methodNames.add(methodName);
-						methodConfigs.add(newBundle);
-					}
-				}
-			}
-		}
-	}
-	else {
-		ConfigBundle newBundle = cm.getBundle("epinions");
-		newBundle.addProperty("method", method);
-		methodName = ((sq) ? "quad" : "linear") + "-" + method.toLowerCase();
-		methodNames.add(methodName);
-		methodConfigs.add(newBundle);
-	}
-}
+List<ConfigBundle> configs = configGenerator.getConfigs();
 
 /*
  * PRINTS EXPERIMENT CONFIGURATIONS
  */
-for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++)
-	System.out.println("Config for " + methodNames.get(methodIndex) + "\n" + methodConfigs.get(methodIndex));
+for (ConfigBundle config : configs)
+	System.out.println(config);
 
 /*
  * INITIALIZES DATASTORE AND MODEL
  */
+ConfigManager cm = ConfigManager.getManager();
+ConfigBundle baseConfig = cm.getBundle("epinions");
 //def defaultPath = System.getProperty("java.io.tmpdir") + "/"
 def defaultPath = "/scratch0/bach-icml13/"
 String dbpath = baseConfig.getString("dbpath", defaultPath + "pslEpinions")
@@ -170,7 +104,7 @@ m.add predicate: "knows", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "trusts", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "prior", types: [ArgumentType.UniqueID]
 
-double initialWeight = 10
+double initialWeight = 1
 
 m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & trusts(B,C) & (A - B) & (B - C) & (A - C)) >> trusts(A,C), weight: initialWeight, squared: sq   //FFpp
 m.add rule: (knows(A,B) & knows(B,C) & knows(A,C) & trusts(A,B) & ~trusts(B,C) & (A - B) & (B - C) & (A - C)) >> ~trusts(A,C), weight: initialWeight, squared: sq //FFpm
@@ -211,7 +145,7 @@ Partition fullTrusts = new Partition(1)
 /*
  * LOAD DATA
  */
-def dataPath = "./epinions/"
+def dataPath = "./data/epinions/"
 def inserter
 inserter = data.getInserter(knows, fullKnows)
 InserterUtils.loadDelimitedDataTruth(inserter, dataPath + "knows.txt")
@@ -245,7 +179,7 @@ for (int i = 0; i < folds; i++) {
 
 
 List<List<Double []>> results = new ArrayList<List<Double []>>()
-for (int i = 0; i < methodNames.size(); i++)
+for (int i = 0; i < configs.size(); i++)
 	results.add(new ArrayList<Double []>())
 
 for (int fold = 0; fold < folds; fold++) {
@@ -348,16 +282,17 @@ for (int fold = 0; fold < folds; fold++) {
 	
 //	DataOutputter.outputPredicate("output/epinions/training-truth" + fold + ".directed" , labelsDB, trusts, ",", true, "Source,Target,TrueTrusts");
 
-	for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
+	for (int configIndex = 0; configIndex < configs.size(); configIndex++) {
+		ConfigBundle config = configs.get(configIndex);
 		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 			k.setWeight(weights.get(k))
 
 		/*
 		 * Weight learning
 		 */
-		learn(m, trainDB, labelsDB, methodConfigs.get(methodIndex), log)
+		learn(m, trainDB, labelsDB, config, log)
 
-		System.out.println("Learned model " + methodNames.get(methodIndex) + "\n" + m.toString())
+		System.out.println("Learned model " + config.getString("name", "") + "\n" + m.toString())
 
 		/*
 		 * Inference on test set
@@ -370,7 +305,7 @@ for (int fold = 0; fold < folds; fold++) {
 				atom.setValue(0.0)
 			}
 		}
-		MPEInference mpe = new MPEInference(m, testDB, baseConfig)
+		MPEInference mpe = new MPEInference(m, testDB, config)
 		FullInferenceResult result = mpe.mpeInference()
 		testDB.close()
 
@@ -395,7 +330,7 @@ for (int fold = 0; fold < folds; fold++) {
 		System.out.println("Area under negative-class PR curve: " + score[1])
 		System.out.println("Area under ROC curve: " + score[2])
 
-		results.get(methodIndex).add(fold, score)
+		results.get(configIndex).add(fold, score)
 		resultsDB.close()
 		groundTruthDB.close()
 	}
@@ -403,9 +338,9 @@ for (int fold = 0; fold < folds; fold++) {
 	labelsDB.close()
 }
 
-for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
-	def methodStats = results.get(methodIndex)
-	methodName = methodNames.get(methodIndex)
+for (int configIndex = 0; configIndex < configs.size(); configIndex++) {
+	def methodStats = results.get(configIndex)
+	configName = configs.get(configIndex).getString("name", "");
 	sum = new double[3];
 	sumSq = new double[3];
 	for (int fold = 0; fold < folds; fold++) {
@@ -414,7 +349,7 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 			sum[i] += score[i];
 			sumSq[i] += score[i] * score[i];
 		}
-		System.out.println("Method " + methodName + ", fold " + fold +", auprc positive: "
+		System.out.println("Method " + configName + ", fold " + fold +", auprc positive: "
 				+ score[0] + ", negative: " + score[1] + ", auROC: " + score[2])
 	}
 
@@ -426,18 +361,18 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 	}
 
 	System.out.println();
-	System.out.println("Method " + methodName + ", auprc positive: (mean/variance) "
+	System.out.println("Method " + configName + ", auprc positive: (mean/variance) "
 			+ mean[0] + "  /  " + variance[0] );
-	System.out.println("Method " + methodName + ", auprc negative: (mean/variance) "
+	System.out.println("Method " + configName + ", auprc negative: (mean/variance) "
 			+ mean[1] + "  /  " + variance[1] );
-	System.out.println("Method " + methodName + ", auROC: (mean/variance) "
+	System.out.println("Method " + configName + ", auROC: (mean/variance) "
 			+ mean[2] + "  /  " + variance[2] );
 	System.out.println();
 }
 
 
-private void learn(Model m, Database db, Database labelsDB, ConfigBundle config, Logger log) {
-	switch(config.getString("method", "")) {
+public void learn(Model m, Database db, Database labelsDB, ConfigBundle config, Logger log) {
+	switch(config.getString("learningmethod", "")) {
 		case "MLE":
 			MaxLikelihoodMPE mle = new MaxLikelihoodMPE(m, db, labelsDB, config)
 			mle.learn()
@@ -449,24 +384,6 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 		case "MM":
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
 			mm.learn()
-			break
-		case "HEMRandOM":
-//			HardEMRandOM2 hardRandOM = new HardEMRandOM2(m, db, labelsDB, config)
-//			hardRandOM.setSlackPenalty(10000)
-//			hardRandOM.learn()
-			break
-		case "FirstOrderRandOM":
-			FirstOrderMetropolisRandOM randOM = new FirstOrderMetropolisRandOM(m, db, labelsDB, config)
-			randOM.learn()
-			break
-		case "IncompatibilityRandOM":
-//			GroundIncompatibilityMetropolisRandOM randOM = new GroundIncompatibilityMetropolisRandOM(m, db, labelsDB, config);
-			IncompatibilityMetropolisRandOM randOM = new IncompatibilityMetropolisRandOM(m, db, labelsDB, config);
-			randOM.learn();
-			break
-		case "GroundRandOM":
-			GroundMetropolisRandOM randOM = new GroundMetropolisRandOM(m, db, labelsDB, config)
-			randOM.learn()
 			break
 		default:
 			throw new IllegalArgumentException("Unrecognized method.");
