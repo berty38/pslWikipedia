@@ -13,9 +13,7 @@ import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin
 import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin.LossBalancingType
 import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin.NormScalingType
 import edu.umd.cs.psl.application.learning.weight.random.FirstOrderMetropolisRandOM
-import edu.umd.cs.psl.application.learning.weight.random.GroundIncompatibilityMetropolisRandOM;
 import edu.umd.cs.psl.application.learning.weight.random.GroundMetropolisRandOM
-import edu.umd.cs.psl.application.learning.weight.random.HardEMRandOM2
 import edu.umd.cs.psl.application.learning.weight.random.IncompatibilityMetropolisRandOM
 import edu.umd.cs.psl.application.learning.weight.random.MetropolisRandOM
 import edu.umd.cs.psl.config.*
@@ -453,9 +451,9 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 			mm.learn()
 			break
 		case "HEMRandOM":
-			HardEMRandOM2 hardRandOM = new HardEMRandOM2(m, db, labelsDB, config)
+//			HardEMRandOM2 hardRandOM = new HardEMRandOM2(m, db, labelsDB, config)
 //			hardRandOM.setSlackPenalty(10000)
-			hardRandOM.learn()
+//			hardRandOM.learn()
 			break
 		case "FirstOrderRandOM":
 			FirstOrderMetropolisRandOM randOM = new FirstOrderMetropolisRandOM(m, db, labelsDB, config)

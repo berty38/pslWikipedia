@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory
 
 import com.google.common.collect.Iterables
 
+import edu.umd.cs.linqs.WeightLearner;
 import edu.umd.cs.psl.application.inference.MPEInference
 import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxLikelihoodMPE
 import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxPseudoLikelihood
@@ -42,14 +43,8 @@ import edu.umd.cs.psl.model.parameters.Weight
 import edu.umd.cs.psl.ui.loading.*
 import edu.umd.cs.psl.util.database.Queries
 
-//methods = ["RandOM", "MM1", "MM10", "MM100", "MM1000", "MLE"]
-//methods = ["MM1", "MM10", "MM100", "MM1000", "MLE"]
-methods = ["None","MLE","MPLE","MM1"]
 
-
-/**
- * CONFIGURATION PARAMETERS
- */
+/*** CONFIGURATION PARAMETERS ***/
 
 dataPath = "./data/citeseer/"
 numCategories = 6
@@ -65,6 +60,7 @@ trainTestRatio = 0.5 // ratio of train to test splits (random)
 filterRatio = 1.0 // ratio of documents to keep (throw away the rest)
 targetSize = 3000 // target size of snowball sampler
 explore = 0.001 // prob of random node in snowball sampler
+methods = ["RAND","MLE","MPLE","MM1"]
 
 Logger log = LoggerFactory.getLogger(this.class)
 
@@ -113,13 +109,16 @@ else {
 // ensure that HasCat sums to 1
 m.add PredicateConstraint.Functional , on : HasCat
 
+/* get all default weights */
+Map<CompatibilityKernel,Weight> initWeights = new HashMap<CompatibilityKernel, Weight>()
+for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
+	initWeights.put(k, k.getWeight());
+
+
+/*** LOAD DATA ***/
 Partition fullObserved =  new Partition(0)
 Partition groundTruth = new Partition(1)
 
-
-/*
- * LOAD DATA
- */
 def inserter
 inserter = data.getInserter(Link, fullObserved)
 InserterUtils.loadDelimitedData(inserter, dataPath + linkFile)
@@ -141,9 +140,7 @@ ArrayList<Set<Integer>> testingKeys = new ArrayList<Set<Integer>>()
 def queries = new HashSet<DatabaseQuery>()
 
 
-/*
- * DEFINE PRIMARY KEY QUERIES FOR FOLD SPLITTING
- */
+/* DEFINE PRIMARY KEY QUERIES FOR FOLD SPLITTING */
 Variable document = new Variable("Document")
 Variable linkedDocument = new Variable("LinkedDoc")
 keys.add(document)
@@ -223,9 +220,7 @@ for (String method : methods)
 
 for (int fold = 0; fold < folds; fold++) {
 
-	/*
-	 * POPULATE DBs
-	 */
+	/*** POPULATE DBs ***/
 	
 	Database db;
 	DatabasePopulator dbPop;
@@ -280,45 +275,21 @@ for (int fold = 0; fold < folds; fold++) {
 	toClose = [HasCat] as Set //[HasCat, avgValue__1] as Set
 	Database labelsDB = data.getDatabase(trainLabelPartitions.get(fold), toClose)
 
-	
-	/* get all default weights */
-	Map<CompatibilityKernel,Weight> initWeights = new HashMap<CompatibilityKernel, Weight>()
-	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-		initWeights.put(k, k.getWeight());
-
-	/* create some random weights (for no weight learning method) */
-	Map<CompatibilityKernel,Weight> randWeights = new HashMap<CompatibilityKernel, Weight>()
-	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-		randWeights.put(k, rand.nextDouble());
-	
 	def groundTruthDB = data.getDatabase(testLabelPartitions.get(fold), [HasCat] as Set)
 	DataOutputter.outputPredicate("output/graph/groundTruth" + fold + ".node" , groundTruthDB, HasCat, ",", false, "nodeid,label")
 	groundTruthDB.close()
 
 	DataOutputter.outputPredicate("output/graph/groundTruth" + fold + ".directed" , testDB, Link, ",", false, null)
-
+	
+	/*** EXPERIMENT ***/
 	for (String method : methods) {
 		
-		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class)) {
-			if (method.equals("None")) {
-				Weight w = k.getWeight()
-				w.setParameter(0, rand.nextDouble())
-				k.setWeight(w)
-			}
-			else
-				k.setWeight(initWeights.get(k))
-		}
-
-		/*
-		 * Weight learning
-		 */
-		learn(m, trainDB, labelsDB, cb, method, log)
+		/* Weight learning */
+		WeightLearner.learn(method, m, trainDB, labelsDB, initWeights, cb, log)
 
 		System.out.println("Learned model " + method + "\n" + m.toString())
 
-		/*
-		 * Inference on test set
-		 */
+		/* Inference on test set */
 		Set<GroundAtom> allAtoms = Queries.getAllAtoms(testDB, HasCat)
 		for (RandomVariableAtom atom : Iterables.filter(allAtoms, RandomVariableAtom))
 			atom.setValue(0.0)
@@ -326,9 +297,7 @@ for (int fold = 0; fold < folds; fold++) {
 		FullInferenceResult result = mpe.mpeInference()
 		System.out.println("Objective: " + result.getTotalWeightedIncompatibility())
 
-		/*
-		 * Evaluation
-		 */
+		/* Evaluation */
 		def comparator = new DiscretePredictionComparator(testDB)
 		groundTruthDB = data.getDatabase(testLabelPartitions.get(fold), [HasCat] as Set)
 		comparator.setBaseline(groundTruthDB)
