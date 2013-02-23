@@ -40,7 +40,37 @@ import edu.umd.cs.psl.model.parameters.Weight
 //import edu.umd.cs.psl.application.learning.weight.random.HardEMRandOM2
 
 
-testLeft = false
+Logger log = LoggerFactory.getLogger(this.class)
+
+/* VISION EXPERIMENT SETTINGS */
+// test on left half of face (bottom if false)
+testLeft = true
+// train on randomly sampled pixels
+trainOnRandom = true
+// number of training faces
+numTraining = 50
+// number of testing faces
+numTesting = 50
+// max prediction resolution
+maxGridResolution = 64
+
+
+if (args.length >= 2) {
+	if (args[0] == "bottom") {
+		testLeft = false
+		log.info("Testing on bottom of face")
+	} else {
+		testLeft = true
+		log.info("Testing on left of face")
+	}
+	if (args[1] == "half") {
+		trainOnRandom = false
+		log.info("Training on given half of face")
+	} else {
+		trainOnRandom = true
+		log.info("Training on randomly held-out pixels")
+	}
+}
 
 /*
  * SET LEARNING ALGORITHMS
@@ -56,26 +86,9 @@ testLeft = false
 methods = ["MLE"];
 
 /* MLE/MPLE options */
-vpStepCounts = [500]
+vpStepCounts = [200]
 vpStepSizes = [5]
 
-/* MM options */
-slackPenalties = [1]
-//slackPenalties = [0.00001, 0.00005, 0.0001, 0.0005, 0.001, 0.005, 0.01]
-lossBalancings = [LossBalancingType.NONE]
-normScalings = [NormScalingType.NONE]
-squareSlacks = [true, false]
-//slackPenalties = [1, 10, 100]
-//lossBalancings = [LossBalancingType.NONE, LossBalancingType.CLASS_WEIGHTS, LossBalancingType.INVERSE_CLASS_WEIGHTS]
-//normScalings = [NormScalingType.NONE, NormScalingType.INVERSE_NUM_GROUNDINGS]
-
-/* Metropolis RandOM options */
-sampleCounts = [500]
-burnInFractions = [0.1]
-maxIters = [25]
-obsvScales = [1]
-
-Logger log = LoggerFactory.getLogger(this.class)
 
 ConfigManager cm = ConfigManager.getManager()
 ConfigBundle baseConfig = cm.getBundle("vision")
@@ -101,48 +114,6 @@ for (String method : methods) {
 			}
 		}
 	}
-	else if (method.equals("MM")) {
-		for (boolean squareSlack : squareSlacks) {
-			for (double slackPenalty : slackPenalties) {
-				for (LossBalancingType lossBalancing : lossBalancings) {
-					for (NormScalingType normScaling : normScalings) {
-						ConfigBundle newBundle = cm.getBundle("vision");
-						newBundle.addProperty("method", method);
-						newBundle.addProperty(MaxMargin.SLACK_PENALTY_KEY, slackPenalty);
-						newBundle.addProperty(MaxMargin.BALANCE_LOSS_KEY, lossBalancing);
-						newBundle.addProperty(MaxMargin.SCALE_NORM_KEY, normScaling);
-						newBundle.addProperty(MaxMargin.SQUARE_SLACK_KEY, squareSlack);
-						methodName = ((sq) ? "quad" : "linear") + "-mm-" + slackPenalty + "-" + lossBalancing.name().toLowerCase() + "-" + normScaling.name().toLowerCase() + "-" + squareSlack;
-						methodNames.add(methodName);
-						methodConfigs.add(newBundle);
-					}
-				}
-			}
-		}
-	}
-	else if (method.equals("FirstOrderRandOM") || method.equals("IncompatibilityRandOM") || method.equals("GroundRandOM")) {
-		for (int numSamples : sampleCounts) {
-			for (double burnInFraction : burnInFractions) {
-				burnIn = Math.round(numSamples * burnInFraction);
-				for (int maxIter : maxIters) {
-					for (double obsvScale : obsvScales) {
-						ConfigBundle newBundle = cm.getBundle("vision");
-						newBundle.addProperty("method", method);
-						newBundle.addProperty(GroundMetropolisRandOM.PROPOSAL_VARIANCE, 0.00005);
-						newBundle.addProperty(MetropolisRandOM.INITIAL_VARIANCE_KEY, 1);
-						newBundle.addProperty(MetropolisRandOM.CHANGE_THRESHOLD_KEY, 0.001);
-						newBundle.addProperty(MetropolisRandOM.NUM_SAMPLES_KEY, numSamples);
-						newBundle.addProperty(MetropolisRandOM.BURN_IN_KEY, burnIn);
-						newBundle.addProperty(MetropolisRandOM.MAX_ITER_KEY, maxIter);
-						newBundle.addProperty(MetropolisRandOM.OBSERVATION_DENSITY_SCALE_KEY, obsvScale);
-						methodName = ((sq) ? "quad" : "linear") + "-" + method.toLowerCase() + "-" + numSamples + "-" + burnIn + "-" + maxIter + "-" + obsvScale;
-						methodNames.add(methodName);
-						methodConfigs.add(newBundle);
-					}
-				}
-			}
-		}
-	}
 	else {
 		ConfigBundle newBundle = cm.getBundle("vision");
 		newBundle.addProperty("method", method);
@@ -163,8 +134,8 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++)
  */
 def defaultPath = System.getProperty("java.io.tmpdir") + "/"
 String dbpath = baseConfig.getString("dbpath", defaultPath + "pslOlivetti")
-//DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), baseConfig)
-DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Memory, dbpath, true), baseConfig)
+DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), baseConfig)
+//DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Memory, dbpath, true), baseConfig)
 
 PSLModel m = new PSLModel(this, data)
 
@@ -212,7 +183,7 @@ for (Patch p : hierarchy.getPatches().values()) {
 	//	m.add rule: (picture(pic) & level(patch,L)) >> brightness__1(patch,pic), weight: initialWeight, squared: sq
 	//	m.add rule: (picture(pic) & level(patch,L)) >> ~brightness__1(patch,pic), weight: initialWeight, squared: sq
 
-	if (p.getLevel() <= 64) {
+	if (p.getLevel() <= maxGridResolution) {
 		/** NEIGHBOR AGREEMENT **/
 		// north neighbor
 		if (p.hasNorth()) {
@@ -273,18 +244,6 @@ Partition testWrite = new Partition(5)
  */
 dataDir = "data/vision"
 
-for (Partition obsPart : [trainObs, testObs]) {
-	def readDB = data.getDatabase(obsPart)
-	ImagePatchUtils.insertFromPatchMap(north, readDB, hierarchy.getNorth())
-	ImagePatchUtils.insertFromPatchMap(east, readDB, hierarchy.getEast())
-	ImagePatchUtils.insertFromPatchMap(horizontalMirror, readDB, hierarchy.getMirrorHorizontal())
-	ImagePatchUtils.insertFromPatchMap(verticalMirror, readDB, hierarchy.getMirrorVertical())
-	//		ImagePatchUtils.insertNeighbors(neighbors, readDB, hierarchy)
-	ImagePatchUtils.insertPatchLevels(readDB, hierarchy, level)
-	ImagePatchUtils.insertPixelPatchChildren(children, readDB, hierarchy)
-	readDB.close()
-}
-
 // construct observed mask
 boolean[] mask = new boolean[width * height]
 boolean[] negMask = new boolean[width * height]
@@ -303,15 +262,27 @@ for (int x = 0; x < width; x++) {
 	}
 }
 
+for (Partition part : [trainObs, testObs]) {
+	def readDB = data.getDatabase(part)
+	ImagePatchUtils.insertFromPatchMap(north, readDB, hierarchy.getNorth())
+	ImagePatchUtils.insertFromPatchMap(east, readDB, hierarchy.getEast())
+	ImagePatchUtils.insertFromPatchMap(horizontalMirror, readDB, hierarchy.getMirrorHorizontal())
+	ImagePatchUtils.insertFromPatchMap(verticalMirror, readDB, hierarchy.getMirrorVertical())
+	//		ImagePatchUtils.insertNeighbors(neighbors, readDB, hierarchy)
+	ImagePatchUtils.insertPatchLevels(readDB, hierarchy, level)
+	ImagePatchUtils.insertPixelPatchChildren(children, readDB, hierarchy)
+	readDB.close()
+}
+
 ArrayList<double []> images = ImagePatchUtils.loadImages(dataDir + "/olivetti01.txt", width, height)
 // create list of train images and test images
 ArrayList<double []> trainImages = new ArrayList<double[]>()
 ArrayList<double []> testImages = new ArrayList<double[]>()
-//for (int i = 0; i < 1; i++) {
+
 for (int i = 0; i < images.size(); i++) {
-	if (((i % 10 == 0) || (i % 10 == 1)) && i < 40) //images.size() - 50)
+	if (i < numTraining)
 		trainImages.add(images.get(i))
-	else if (i >= images.size() - 50 - 1)
+	else if (i >= images.size() - numTesting)
 		testImages.add(images.get(i))
 }
 
@@ -337,15 +308,18 @@ for (int i = 0; i < trainImages.size(); i++) {
 	c = 0
 	for (int x = 0; x < width; x++) {
 		for (int y = 0; y < height; y++) {
-			trainMask[c] = rand.nextBoolean()
+			if (trainOnRandom) {
+				trainMask[c] = rand.nextBoolean()
+			} else
+				trainMask[c] = mask[c]
 			negTrainMask[c] = !trainMask[c]
 			c++
 		}
 	}
 
 	UniqueID id = data.getUniqueID(i)
-	ImagePatchUtils.setPixels(pixelBrightness, id, trainReadDB, hierarchy, width, height, trainImages.get(i), mask)
-	ImagePatchUtils.setPixels(pixelBrightness, id, trainLabelDB, hierarchy, width, height, trainImages.get(i), negMask)
+	ImagePatchUtils.setPixels(pixelBrightness, id, trainReadDB, hierarchy, width, height, trainImages.get(i), trainMask)
+	ImagePatchUtils.setPixels(pixelBrightness, id, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
 
 	ImagePatchUtils.populateAllPatches(brightness__1, id, trainWriteDB, hierarchy)
 	ImagePatchUtils.populateAllPatches(brightness__1, id, trainLabelDB, hierarchy)
@@ -392,7 +366,6 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 	def labelDB = data.getDatabase(trainLabel, labelClose)
 	def groundTruthDB = data.getDatabase(testLabel, labelClose)
 
-
 	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 		k.setWeight(weights.get(k))
 
@@ -420,7 +393,8 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 	MPEInference mpe = new MPEInference(m, testDB, baseConfig)
 	FullInferenceResult result = mpe.mpeInference()
 	System.out.println("Objective: " + result.getTotalWeightedIncompatibility())
-	DataOutputter.outputPredicate("output/vision/testPrediction" + methodNames.get(methodIndex) + ".txt" , testDB, pixelBrightness, ",", true, "index,image")
+	def expSetup = (testLeft? "left" : "bottom") + "-" + (trainOnRandom? "same" : "rand")
+	DataOutputter.outputPredicate("output/vision/olivetti-" + expSetup + "-" + methodNames.get(methodIndex) + ".txt" , testDB, pixelBrightness, ",", true, "index,image")
 
 	testDB.close()
 
@@ -436,19 +410,20 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 	score = comparator.compare(pixelBrightness) * (255 * 255) // scale to full 256 grayscale range
 	scores.add(methodIndex, score);
 
+	methodName = methodNames.get(methodIndex)
+	System.out.println("Method: " + methodName + ", mean squared error: " + scores.get(methodIndex))
 
 	// close all databases
 	groundTruthDB.close()
 	testDB.close()
 }
 
-
+def expSetup = (testLeft? "left" : "bottom") + "-" + (trainOnRandom? "same" : "rand")
 
 for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 	methodName = methodNames.get(methodIndex)
-	System.out.println("Method: " + methodName + ", mean squared error: " + scores.get(methodIndex))
+	System.out.println(expSetup + ", method: " + methodName + ", mean squared error: " + scores.get(methodIndex))
 }
-
 
 private void learn(Model m, Database db, Database labelsDB, ConfigBundle config, Logger log) {
 	switch(config.getString("method", "")) {

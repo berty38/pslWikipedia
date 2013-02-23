@@ -39,8 +39,8 @@ public class PatchStructure {
 		ArrayList<Integer> startXs = new ArrayList<Integer>(resolution+1);
 		ArrayList<Integer> startYs = new ArrayList<Integer>(resolution+1);
 		for (int i = 0; i < resolution; i++) {
-			startXs.add(i, (int) (i * width / resolution));
-			startYs.add(i, (int) (i * height / resolution));
+			startXs.add(i, (int) (0.5 + i * width / resolution));
+			startYs.add(i, (int) (0.5 + i * height / resolution));
 		}
 		startXs.add(resolution, width);
 		startYs.add(resolution, height);
@@ -77,14 +77,15 @@ public class PatchStructure {
 
 	public void generateHierarchy() {
 //		generateGridResolution(2);
-		generateGridResolution(4);
-		generateGridResolution(8);
-		generateGridResolution(12);
-		generateGridResolution(16);
-		generateGridResolution(32);
-		generateGridResolution(48);
-		generateGridResolution(64);
+//		generateGridResolution(4);
+//		generateGridResolution(8);
+//		generateGridResolution(16);
+//		generateGridResolution(32);
+//		generateGridResolution(48);
+		//generateGridResolution(64);
+//		generateGridResolution(100);
 
+		generateGridResolution(width);
 //		generateRowPatches();
 //		generateColumnPatches();
 		log.debug("Generated {} patches", patchCounter);
