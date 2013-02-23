@@ -64,14 +64,14 @@ configGenerator.setModelTypes(["quad", "bool"]);
 configGenerator.setLearningMethods(["MLE", "MPLE", "MM"]);
 
 /* MLE/MPLE options */
-configGenerator.setVotedPerceptronStepCounts([5]);
-configGenerator.setVotedPerceptronStepSizes([(double) 1.0]);
+configGenerator.setVotedPerceptronStepCounts([20, 50, 100]);
+configGenerator.setVotedPerceptronStepSizes([(double) 1.0, (double) 2.0, (double) 5.0]);
 
 /* MM options */
-configGenerator.setMaxMarginSlackPenalties([(double) 1.0]);
+configGenerator.setMaxMarginSlackPenalties([(double) 0.1, (double) 0.5, (double) 1.0]);
 configGenerator.setMaxMarginLossBalancingTypes([LossBalancingType.NONE]);
 configGenerator.setMaxMarginSlackPenalties([NormScalingType.NONE]);
-configGenerator.setMaxMarginSquaredSlackValues([false]);
+configGenerator.setMaxMarginSquaredSlackValues([false, true]);
 
 Logger log = LoggerFactory.getLogger(this.class)
 
