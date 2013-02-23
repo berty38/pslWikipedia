@@ -35,7 +35,7 @@ import edu.umd.cs.psl.util.database.Queries
 /*** CONFIGURATION PARAMETERS ***/
 
 dataPath = "./data/jester/"
-methods = ["RAND","MPLE"]
+methods = ["MLE","MPLE"]
 
 Logger log = LoggerFactory.getLogger(this.class)
 ConfigManager cm = ConfigManager.getManager();
@@ -326,6 +326,7 @@ for (int fold = 0; fold < folds; fold++) {
 	dbPop.populate(new QueryAtom(rating, User, Joke), subs);
 
 	/*** EXPERIMENT ***/
+	System.out.println("Starting experiment ...");
 	for (String method : methods) {
 		
 		/* Weight learning */
