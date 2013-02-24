@@ -48,7 +48,7 @@ folds = 1
 
 /*** MODEL DEFINITION ***/
 
-System.out.println("Initializing model ...");
+log.info("Initializing model ...");
 
 PSLModel m = new PSLModel(this, data);
 
@@ -97,7 +97,7 @@ UniqueID constant = data.getUniqueID(0)
 m.add rule: ( user(U) & joke(J) & ratingPrior(constant) ) >> rating(U,J), weight: 1.0, squared: sq;
 m.add rule: ( rating(U,J) ) >> ratingPrior(constant), weight: 1.0, squared: sq;
 
-System.out.println(m)
+log.info("Model: {}", m)
 
 /* get all default weights */
 Map<CompatibilityKernel,Weight> initWeights = new HashMap<CompatibilityKernel, Weight>()
@@ -107,9 +107,12 @@ for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKerne
 
 /*** LOAD DATA ***/
 
-System.out.println("Loading data ...");
+log.info("Loading data ...");
 
-ArrayList<Double> scores = new ArrayList<Double>(folds);
+Map<String,ArrayList<Double>> scores = new HashMap<String,ArrayList<Double>>();
+for (String method : methods) {
+	scores.put(method, new ArrayList<Double>(folds));
+}
 
 for (int fold = 0; fold < folds; fold++) {
 
@@ -124,9 +127,9 @@ for (int fold = 0; fold < folds; fold++) {
 
 	// users
 	inserter = data.getInserter(user, read_tr);
-	InserterUtils.loadDelimitedData(inserter, dataPath + "/users-tr-sm.txt");
+	InserterUtils.loadDelimitedData(inserter, dataPath + "/users-tr.txt");
 	inserter = data.getInserter(user, read_te);
-	InserterUtils.loadDelimitedData(inserter, dataPath + "/users-te-sm.txt");
+	InserterUtils.loadDelimitedData(inserter, dataPath + "/users-te.txt");
 	// jokes
 	inserter = data.getInserter(joke, read_tr);
 	InserterUtils.loadDelimitedData(inserter, dataPath + "/jokes.txt");
@@ -185,7 +188,7 @@ for (int fold = 0; fold < folds; fold++) {
 	/* First we populate training database.
 	 * In the process, we will precompute averages ratings. 
 	 */
-	System.out.println("Computing averages ...")
+	log.info("Computing averages ...")
 	Database trainDB = data.getDatabase(read_tr);
 	results = trainDB.executeQuery(Queries.getQueryForAllAtoms(user));
 	for (int i = 0; i < results.size(); i++) {
@@ -215,12 +218,12 @@ for (int fold = 0; fold < folds; fold++) {
 		avgAllRatingObs += a.getValue();
 	}
 	avgAllRatingObs /= allRatingObs.size();
-	System.out.println("  Average rating (train): " + avgAllRatingObs);
+	log.info("  Average rating (train): {}", avgAllRatingObs);
 	RandomVariableAtom priorAtom = (RandomVariableAtom) trainDB.getAtom(ratingPrior, constant);
 	priorAtom.setValue(avgAllRatingObs);
 	
 	/* Precompute the similarities. */
-	System.out.println("Computing training similarities ...")
+	log.info("Computing training similarities ...")
 	double avgsim = 0.0;
 	for (GroundTerm j1 : jokes) {
 		for (GroundTerm j2 : jokes) {
@@ -231,7 +234,7 @@ for (int fold = 0; fold < folds; fold++) {
 			avgsim += s;
 		}
 	}
-	System.out.println("  Average joke rating sim (train): " + avgsim / (jokes.size() * jokes.size()));
+	log.info("  Average joke rating sim (train): {}", avgsim / (jokes.size() * jokes.size()));
 	//
 	//		avgsim = 0.0;
 	//		for (GroundTerm u1 : users) {
@@ -243,10 +246,10 @@ for (int fold = 0; fold < folds; fold++) {
 	//				avgsim += s;
 	//			}
 	//		}
-	//		System.out.println("Average user sim (train): " + avgsim / (users.size() * users.size()));
+	//		log.info("Average user sim (train): " + avgsim / (users.size() * users.size()));
 	trainDB.close();
 
-	System.out.println("Populating training database ...");
+	log.info("Populating training database ...");
 	toClose = [user,joke,ratingObs,ratingPrior,simJokeText,avgUserRatingObs,avgJokeRatingObs,simObsTaste,simObsRating] as Set;
 	trainDB = data.getDatabase(write_tr, toClose, read_tr);
 	dbPop = new DatabasePopulator(trainDB);
@@ -260,7 +263,7 @@ for (int fold = 0; fold < folds; fold++) {
 	/* Get the test set users/jokes
 	 * and precompute averages
 	 */
-	System.out.println("Computing averages ...")
+	log.info("Computing averages ...")
 	Database testDB = data.getDatabase(read_te)
 	results = testDB.executeQuery(Queries.getQueryForAllAtoms(user));
 	for (int i = 0; i < results.size(); i++) {
@@ -288,12 +291,12 @@ for (int fold = 0; fold < folds; fold++) {
 		avgAllRatingObs += a.getValue();
 	}
 	avgAllRatingObs /= allRatingObs.size();
-	System.out.println("  Average rating (test): " + avgAllRatingObs);
+	log.info("  Average rating (test): {}", avgAllRatingObs);
 	priorAtom = (RandomVariableAtom) testDB.getAtom(ratingPrior, constant);
 	priorAtom.setValue(avgAllRatingObs);
 
 	/* Precompute the similarities. */
-	System.out.println("Computing testing similarities ...")
+	log.info("Computing testing similarities ...")
 	avgsim = 0.0;
 	for (GroundTerm j1 : jokes) {
 		for (GroundTerm j2 : jokes) {
@@ -304,7 +307,7 @@ for (int fold = 0; fold < folds; fold++) {
 			avgsim += s;
 		}
 	}
-	System.out.println("  Average joke rating sim (test): " + avgsim / (jokes.size() * jokes.size()));
+	log.info("  Average joke rating sim (test): {}", avgsim / (jokes.size() * jokes.size()));
 	//	avgsim = 0.0;
 	//	for (GroundTerm u1 : users) {
 	//		for (GroundTerm u2 : users) {
@@ -315,24 +318,24 @@ for (int fold = 0; fold < folds; fold++) {
 	//			avgsim += s;
 	//		}
 	//	}
-	//	System.out.println("Average user sim (test): " + avgsim / (users.size() * users.size()));
+	//	log.info("Average user sim (test): " + avgsim / (users.size() * users.size()));
 	testDB.close();
 
 	/* Populate testing database. */
-	System.out.println("Populating testing database ...");
+	log.info("Populating testing database ...");
 	toClose = [user,joke,ratingObs,ratingPrior,simJokeText,avgUserRatingObs,avgJokeRatingObs,simObsTaste,simObsRating] as Set;
 	testDB = data.getDatabase(write_te, toClose, read_te);
 	dbPop = new DatabasePopulator(testDB);
 	dbPop.populate(new QueryAtom(rating, User, Joke), subs);
 
 	/*** EXPERIMENT ***/
-	System.out.println("Starting experiment ...");
+	log.info("Starting experiment ...");
 	for (String method : methods) {
 		
 		/* Weight learning */
 		WeightLearner.learn(method, m, trainDB, labelsDB, initWeights, cb, log)
 
-		System.out.println("Learned model " + method + "\n" + m.toString())
+		log.info("Learned model {}: \n {}", method, m.toString())
 
 		/* Inference on test set */
 		Set<GroundAtom> allAtoms = Queries.getAllAtoms(testDB, rating)
@@ -340,7 +343,7 @@ for (int fold = 0; fold < folds; fold++) {
 			atom.setValue(0.0)
 		MPEInference mpe = new MPEInference(m, testDB, cb)
 		FullInferenceResult result = mpe.mpeInference()
-		System.out.println("Objective: " + result.getTotalWeightedIncompatibility())
+		log.info("Objective: {}", result.getTotalWeightedIncompatibility())
 	
 		/* Evaluation */
 		Database groundTruthDB = data.getDatabase(labels_te, [rating] as Set)
@@ -352,10 +355,17 @@ for (int fold = 0; fold < folds; fold++) {
 			comparator.setMetric(metrics.get(i))
 			score[i] = comparator.compare(rating)
 		}
-		System.out.println("Fold " + fold + ", MSE " + score[0] + ", MAE " + score[1]);
-		scores.add(fold, score);
+		log.info("Fold {} : {} : MSE {} : MAE {}", method, fold, score[0], score[1]);
+		scores.get(method).add(fold, score);
 		groundTruthDB.close()
 	}
 	trainDB.close()
+}
 
+for (String method : methods) {
+	log.info("*** {} ***", method)
+	for (int i = 0; i < folds; i++) {
+		ArrayList<Double> score = scores.get(method);
+		log.info("{}\t{}\t{}", i, score[0], score[1]);
+	}
 }
