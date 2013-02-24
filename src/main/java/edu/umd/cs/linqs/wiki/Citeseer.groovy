@@ -10,6 +10,8 @@ import edu.umd.cs.psl.application.inference.MPEInference
 import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxLikelihoodMPE
 import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxPseudoLikelihood
 import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin
+import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin.LossBalancingType
+import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin.NormScalingType
 import edu.umd.cs.psl.application.learning.weight.random.FirstOrderMetropolisRandOM
 import edu.umd.cs.psl.application.learning.weight.random.HardEMRandOM
 import edu.umd.cs.psl.config.*
@@ -53,14 +55,13 @@ labelFile = "citeseer.labels"
 linkFile = "citeseer.links"
 sq = true
 usePerCatRules = true
-folds = 1 // number of folds
+folds = 10 // number of folds
 double seedRatio = 0.5 // ratio of observed labels
 Random rand = new Random(0) // used to seed observed data
 trainTestRatio = 0.5 // ratio of train to test splits (random)
 filterRatio = 1.0 // ratio of documents to keep (throw away the rest)
 targetSize = 3000 // target size of snowball sampler
 explore = 0.001 // prob of random node in snowball sampler
-methods = ["RAND","MLE","MPLE","MM1"]
 
 Logger log = LoggerFactory.getLogger(this.class)
 
@@ -68,8 +69,53 @@ ConfigManager cm = ConfigManager.getManager()
 ConfigBundle cb = cm.getBundle("citeseer")
 
 def defaultPath = System.getProperty("java.io.tmpdir")
-String dbpath = cb.getString("dbpath", defaultPath + File.separator + "psl")
+String dbpath = cb.getString("dbpath", defaultPath + File.separator + "pslCiteseer")
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), cb)
+
+
+
+/**
+ * SET UP CONFIGS
+ */
+
+ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("citeseer");
+
+/*
+ * SET MODEL TYPES
+ *
+ * Options:
+ * "quad" HLEF
+ * "bool" MLN
+ */
+configGenerator.setModelTypes(["quad", "bool"]);
+
+/*
+ * SET LEARNING ALGORITHMS
+ *
+ * Options:
+ * "MLE" (MaxLikelihoodMPE)
+ * "MPLE" (MaxPseudoLikelihood)
+ * "MM" (MaxMargin)
+ */
+configGenerator.setLearningMethods(["MLE", "MPLE", "MM"]);
+
+/* MLE/MPLE options */
+configGenerator.setVotedPerceptronStepCounts([20, 50, 100]);
+configGenerator.setVotedPerceptronStepSizes([(double) 1.0, (double) 2.0, (double) 5.0]);
+
+/* MM options */
+configGenerator.setMaxMarginSlackPenalties([(double) 0.1, (double) 0.5, (double) 1.0]);
+configGenerator.setMaxMarginLossBalancingTypes([LossBalancingType.NONE]);
+configGenerator.setMaxMarginNormScalingTypes([NormScalingType.NONE]);
+configGenerator.setMaxMarginSquaredSlackValues([false, true]);
+
+boolean sq = true
+
+List<ConfigBundle> configs = configGenerator.getConfigs();
+
+
+
+
 
 /*
  * DEFINE MODEL
@@ -110,9 +156,9 @@ else {
 m.add PredicateConstraint.Functional , on : HasCat
 
 /* get all default weights */
-Map<CompatibilityKernel,Weight> initWeights = new HashMap<CompatibilityKernel, Weight>()
+Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
 for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-	initWeights.put(k, k.getWeight());
+	weights.put(k, k.getWeight());
 
 
 /*** LOAD DATA ***/
@@ -140,7 +186,9 @@ ArrayList<Set<Integer>> testingKeys = new ArrayList<Set<Integer>>()
 def queries = new HashSet<DatabaseQuery>()
 
 
-/* DEFINE PRIMARY KEY QUERIES FOR FOLD SPLITTING */
+/*
+ * DEFINE PRIMARY KEY QUERIES FOR FOLD SPLITTING
+ */
 Variable document = new Variable("Document")
 Variable linkedDocument = new Variable("LinkedDoc")
 keys.add(document)
@@ -215,7 +263,7 @@ for (int i = 0; i < folds; i++) {
 }
 
 Map<String, List<DiscretePredictionStatistics>> results = new HashMap<String, List<DiscretePredictionStatistics>>()
-for (String method : methods)
+for (ConfigBundle method : configs)
 	results.put(method, new ArrayList<DiscretePredictionStatistics>())
 
 for (int fold = 0; fold < folds; fold++) {
@@ -246,8 +294,8 @@ for (int fold = 0; fold < folds; fold++) {
 //	substitutions.put(Document, partitionDocuments.get(trainReadPartitions.get(fold)))
 //	dbPop = new DatabasePopulator(db);
 //	dbPop.populate(new QueryAtom(avgValue__1, Document, Category), substitutions)
-//	citeseerBundle.setProperty("admmreasoner.epsilonrel", 1e-16)
-//	MPEInference aggregateComputer = new MPEInference(m, db, citeseerBundle)
+//	coraBundle.setProperty("admmreasoner.epsilonrel", 1e-16)
+//	MPEInference aggregateComputer = new MPEInference(m, db, coraBundle)
 //	aggregateComputer.mpeInference()
 //	db.close()
 //
@@ -276,18 +324,24 @@ for (int fold = 0; fold < folds; fold++) {
 	Database labelsDB = data.getDatabase(trainLabelPartitions.get(fold), toClose)
 
 	def groundTruthDB = data.getDatabase(testLabelPartitions.get(fold), [HasCat] as Set)
-	DataOutputter.outputPredicate("output/graph/groundTruth" + fold + ".node" , groundTruthDB, HasCat, ",", false, "nodeid,label")
+	DataOutputter.outputPredicate("output/citeseer/groundTruth" + fold + ".node" , groundTruthDB, HasCat, ",", false, "nodeid,label")
 	groundTruthDB.close()
 
-	DataOutputter.outputPredicate("output/graph/groundTruth" + fold + ".directed" , testDB, Link, ",", false, null)
+	DataOutputter.outputPredicate("output/citeseer/groundTruth" + fold + ".directed" , testDB, Link, ",", false, null)
 	
 	/*** EXPERIMENT ***/
-	for (String method : methods) {
-		
-		/* Weight learning */
-		WeightLearner.learn(method, m, trainDB, labelsDB, initWeights, cb, log)
+	
+	for (int configIndex = 0; configIndex < configs.size(); configIndex++) {
+		ConfigBundle config = configs.get(configIndex);
+		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
+			k.setWeight(weights.get(k))
 
-		System.out.println("Learned model " + method + "\n" + m.toString())
+		/*
+		 * Weight learning
+		 */
+		learn(m, trainDB, labelsDB, config, log)
+
+		System.out.println("Learned model " + config.getString("name", "") + "\n" + m.toString())
 
 		/* Inference on test set */
 		Set<GroundAtom> allAtoms = Queries.getAllAtoms(testDB, HasCat)
@@ -309,21 +363,21 @@ for (int fold = 0; fold < folds; fold++) {
 		DiscretePredictionStatistics stats = comparator.compare(HasCat, totalTestExamples)
 		System.out.println("F1 score " + stats.getF1(DiscretePredictionStatistics.BinaryClass.POSITIVE))
 
-		results.get(method).add(fold, stats)
+		results.get(config).add(fold, stats)
 
-		DataOutputter.outputClassificationPredictions("output/" + method + fold + ".csv", testDB, HasCat, ",")
+		DataOutputter.outputClassificationPredictions("output/citeseer/" + config.getString("name", "") + fold + ".csv", testDB, HasCat, ",")
 
 		groundTruthDB.close()
 	}
 	trainDB.close()
 }
 
-for (String method : methods) {
-	def methodStats = results.get(method)
+for (ConfigBundle config : configs) {
+	def methodStats = results.get(config)
 	for (int fold = 0; fold < folds; fold++) {
 		def stats = methodStats.get(fold)
 		def b = DiscretePredictionStatistics.BinaryClass.POSITIVE
-		System.out.println("Method " + method + ", fold " + fold +", acc " + stats.getAccuracy() +
+		System.out.println("Method " + config.getString("name", "") + ", fold " + fold +", acc " + stats.getAccuracy() +
 				", prec " + stats.getPrecision(b) + ", rec " + stats.getRecall(b) +
 				", F1 " + stats.getF1(b) + ", correct " + stats.getCorrectAtoms().size() +
 				", tp " + stats.tp + ", fp " + stats.fp + ", tn " + stats.tn + ", fn " + stats.fn)
@@ -331,8 +385,9 @@ for (String method : methods) {
 }
 
 
-private void learn(Model m, Database db, Database labelsDB, ConfigBundle config, String method, Logger log) {
-	switch(method) {
+
+public void learn(Model m, Database db, Database labelsDB, ConfigBundle config, Logger log) {
+	switch(config.getString("learningmethod", "")) {
 		case "MLE":
 			MaxLikelihoodMPE mle = new MaxLikelihoodMPE(m, db, labelsDB, config)
 			mle.learn()
@@ -341,46 +396,14 @@ private void learn(Model m, Database db, Database labelsDB, ConfigBundle config,
 			MaxPseudoLikelihood mple = new MaxPseudoLikelihood(m, db, labelsDB, config)
 			mple.learn()
 			break
-		case "MM0.1":
-			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 0.1);
+		case "MM":
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
 			mm.learn()
 			break
-		case "MM1":
-			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 1);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.learn()
-			break
-		case "MM10":
-			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 10);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.learn()
-			break
-		case "MM100":
-			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 100);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.learn()
-			break
-		case "MM1000":
-			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 1000);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config)
-			mm.learn()
-			break
-		case "HEMRandOM":
-			HardEMRandOM hardRandOM = new HardEMRandOM(m, db, labelsDB, config)
-			hardRandOM.setSlackPenalty(10000)
-		//hardRandOM.learn()
-			break
-		case "RandOM":
-			FirstOrderMetropolisRandOM randOM = new FirstOrderMetropolisRandOM(m, db, labelsDB, config)
-			randOM.learn()
-			break
-		case "SET_TO_ONE":
-			for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-				k.setWeight(new PositiveWeight(1.0))
-		case "NONE":
-			break;
 		default:
-			log.error("Invalid method ")
+			throw new IllegalArgumentException("Unrecognized method.");
 	}
 }
+
+
+

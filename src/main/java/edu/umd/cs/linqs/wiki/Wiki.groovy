@@ -48,11 +48,10 @@ import edu.umd.cs.psl.util.database.Queries
 
 /*** CONFIGURATION PARAMETERS ***/
 
-dataPath = "./data/cora/"
-numCategories = 7
-wordFile = "cora.words"
-labelFile = "cora.labels"
-linkFile = "cora.links"
+dataPath = "./data/wiki/scraper/"
+numCategories = 30
+labelFile = "labels.txt"
+linkFile = "links.txt"
 sq = true
 usePerCatRules = true
 folds = 10 // number of folds
@@ -69,7 +68,7 @@ ConfigManager cm = ConfigManager.getManager()
 ConfigBundle cb = cm.getBundle("cora")
 
 def defaultPath = System.getProperty("java.io.tmpdir")
-String dbpath = cb.getString("dbpath", defaultPath + File.separator + "psl")
+String dbpath = cb.getString("dbpath", defaultPath + File.separator + "pslWiki")
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), cb)
 
 
@@ -78,7 +77,7 @@ DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true
  * SET UP CONFIGS
  */
 
-ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("cora");
+ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("wiki");
 
 /*
  * SET MODEL TYPES
@@ -324,10 +323,10 @@ for (int fold = 0; fold < folds; fold++) {
 	Database labelsDB = data.getDatabase(trainLabelPartitions.get(fold), toClose)
 
 	def groundTruthDB = data.getDatabase(testLabelPartitions.get(fold), [HasCat] as Set)
-	DataOutputter.outputPredicate("output/cora/groundTruth" + fold + ".node" , groundTruthDB, HasCat, ",", false, "nodeid,label")
+	DataOutputter.outputPredicate("output/wiki/groundTruth" + fold + ".node" , groundTruthDB, HasCat, ",", false, "nodeid,label")
 	groundTruthDB.close()
 
-	DataOutputter.outputPredicate("output/cora/groundTruth" + fold + ".directed" , testDB, Link, ",", false, null)
+	DataOutputter.outputPredicate("output/wiki/groundTruth" + fold + ".directed" , testDB, Link, ",", false, null)
 	
 	/*** EXPERIMENT ***/
 	
@@ -365,7 +364,7 @@ for (int fold = 0; fold < folds; fold++) {
 
 		results.get(config).add(fold, stats)
 
-		DataOutputter.outputClassificationPredictions("output/cora/" + config.getString("name", "") + fold + ".csv", testDB, HasCat, ",")
+		DataOutputter.outputClassificationPredictions("output/wiki/" + config.getString("name", "") + fold + ".csv", testDB, HasCat, ",")
 
 		groundTruthDB.close()
 	}
