@@ -6,7 +6,10 @@ import org.slf4j.LoggerFactory
 import com.google.common.collect.Iterables
 
 import edu.umd.cs.linqs.WeightLearner
+import edu.umd.cs.linqs.wiki.ExperimentConfigGenerator
 import edu.umd.cs.psl.application.inference.MPEInference
+import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin.LossBalancingType
+import edu.umd.cs.psl.application.learning.weight.maxmargin.MaxMargin.NormScalingType
 import edu.umd.cs.psl.config.*
 import edu.umd.cs.psl.database.DataStore
 import edu.umd.cs.psl.database.Database
@@ -34,17 +37,53 @@ import edu.umd.cs.psl.util.database.Queries
 
 /*** CONFIGURATION PARAMETERS ***/
 
-dataPath = "./data/jester/"
-methods = ["MLE","MPLE"]
+def dataPath = "./data/jester/"
 
 Logger log = LoggerFactory.getLogger(this.class)
 ConfigManager cm = ConfigManager.getManager();
 ConfigBundle cb = cm.getBundle("jester");
 
-defPath = System.getProperty("java.io.tmpdir") + "/jester"
+def defPath = System.getProperty("java.io.tmpdir") + "/jester"
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), cb)
-folds = 1
+folds = 10
+
+def sq = cb.getBoolean("squared", true);
+
+ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("jester");
+
+/*
+ * SET MODEL TYPES
+ *
+ * Options:
+ * "quad" HLEF
+ * "bool" MLN
+ */
+configGenerator.setModelTypes(["quad"]);
+
+/*
+ * SET LEARNING ALGORITHMS
+ *
+ * Options:
+ * "MLE" (MaxLikelihoodMPE)
+ * "MPLE" (MaxPseudoLikelihood)
+ * "MM" (MaxMargin)
+ */
+methods = ["MLE","MPLE","MM"];
+configGenerator.setLearningMethods(methods);
+
+/* MLE/MPLE options */
+configGenerator.setVotedPerceptronStepCounts([20, 50, 100]);
+configGenerator.setVotedPerceptronStepSizes([(double) 1.0]);
+
+/* MM options */
+configGenerator.setMaxMarginSlackPenalties([(double) 0.1, (double) 0.5, (double) 1.0]);
+configGenerator.setMaxMarginLossBalancingTypes([LossBalancingType.NONE]);
+configGenerator.setMaxMarginNormScalingTypes([NormScalingType.NONE]);
+configGenerator.setMaxMarginSquaredSlackValues([false, true]);
+
+List<ConfigBundle> configs = configGenerator.getConfigs();
+
 
 /*** MODEL DEFINITION ***/
 
@@ -67,8 +106,6 @@ m.add predicate: "simObsRating", types: [ArgumentType.UniqueID,ArgumentType.Uniq
 m.add predicate: "simJokeText", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 
 /* RULES */
-
-def sq = cb.getBoolean("squared", true);
 
 // Ratings should concentrate around average (per user, item)
 //m.add rule: avgUserRatingObs(U) >> avgUserRating(U), weight: 1.0, squared: sq;
@@ -109,9 +146,10 @@ for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKerne
 
 log.info("Loading data ...");
 
-Map<String,ArrayList<Double>> scores = new HashMap<String,ArrayList<Double>>();
-for (String method : methods) {
-	scores.put(method, new ArrayList<Double>(folds));
+
+Map<ConfigBundle,ArrayList<Double>> expResults = new HashMap<String,ArrayList<Double>>();
+for (ConfigBundle config : configs) {
+	expResults.put(config, new ArrayList<Double>(folds));
 }
 
 for (int fold = 0; fold < folds; fold++) {
@@ -330,18 +368,21 @@ for (int fold = 0; fold < folds; fold++) {
 
 	/*** EXPERIMENT ***/
 	log.info("Starting experiment ...");
-	for (String method : methods) {
-		
-		/* Weight learning */
-		WeightLearner.learn(method, m, trainDB, labelsDB, initWeights, cb, log)
+	for (int configIndex = 0; configIndex < configs.size(); configIndex++) {
+		ConfigBundle config = configs.get(configIndex);
+		def configName = config.getString("name", "");
+		def method = config.getString("learningmethod", "");
 
-		log.info("Learned model {}: \n {}", method, m.toString())
+		/* Weight learning */
+		WeightLearner.learn(method, m, trainDB, labelsDB, initWeights, config, log)
+
+		log.info("Learned model {}: \n {}", configName, m.toString())
 
 		/* Inference on test set */
 		Set<GroundAtom> allAtoms = Queries.getAllAtoms(testDB, rating)
 		for (RandomVariableAtom atom : Iterables.filter(allAtoms, RandomVariableAtom))
 			atom.setValue(0.0)
-		MPEInference mpe = new MPEInference(m, testDB, cb)
+		MPEInference mpe = new MPEInference(m, testDB, config)
 		FullInferenceResult result = mpe.mpeInference()
 		log.info("Objective: {}", result.getTotalWeightedIncompatibility())
 	
@@ -355,17 +396,19 @@ for (int fold = 0; fold < folds; fold++) {
 			comparator.setMetric(metrics.get(i))
 			score[i] = comparator.compare(rating)
 		}
-		log.info("Fold {} : {} : MSE {} : MAE {}", method, fold, score[0], score[1]);
-		scores.get(method).add(fold, score);
+		log.info("Fold {} : {} : MSE {} : MAE {}", fold, configName, score[0], score[1]);
+		expResults.get(config).add(fold, score);
 		groundTruthDB.close()
 	}
 	trainDB.close()
 }
 
-for (String method : methods) {
-	log.info("*** {} ***", method)
-	for (int i = 0; i < folds; i++) {
-		ArrayList<Double> score = scores.get(method);
-		log.info("{}\t{}\t{}", i, score[0], score[1]);
+log.warn("\n\nRESULTS\n");
+for (ConfigBundle config : configs) {
+	def configName = config.getString("name", "")
+	def scores = expResults.get(config);
+	for (int fold = 0; fold < folds; fold++) {
+		def score = scores.get(fold)
+		log.warn("{} \t{}\t{}\t{}", configName, fold, score[0], score[1]);
 	}
 }

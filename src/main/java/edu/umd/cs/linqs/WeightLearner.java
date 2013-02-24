@@ -35,40 +35,19 @@ public class WeightLearner {
 			MaxPseudoLikelihood mple = new MaxPseudoLikelihood(m, db, labelsDB, config);
 			mple.learn();
 		}
-		else if (method.equals("MM0.1")) {
-			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 0.1);
+		else if (method.equals("MM")) {
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config);
 			mm.learn();
 		}
-		else if (method.equals("MM1")) {
-			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 1);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config);
-			mm.learn();
-		}
-		else if (method.equals("MM10")) {
-			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 10);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config);
-			mm.learn();
-		}
-		else if (method.equals("MM100")) {
-			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 100);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config);
-			mm.learn();
-		}
-		else if (method.equals("MM1000")) {
-			config.setProperty(MaxMargin.SLACK_PENALTY_KEY, 1000);
-			MaxMargin mm = new MaxMargin(m, db, labelsDB, config);
-			mm.learn();
-		}
-		else if (method.equals("HEMRandOM")) {
-			HardEMRandOM hardRandOM = new HardEMRandOM(m, db, labelsDB, config);
-			hardRandOM.setSlackPenalty(10000);
-			hardRandOM.learn();
-		}
-		else if (method.equals("RandOM")) {
-			FirstOrderMetropolisRandOM randOM = new FirstOrderMetropolisRandOM(m, db, labelsDB, config);
-			randOM.learn();
-		}
+//		else if (method.equals("HEMRandOM")) {
+//			HardEMRandOM hardRandOM = new HardEMRandOM(m, db, labelsDB, config);
+//			hardRandOM.setSlackPenalty(10000);
+//			hardRandOM.learn();
+//		}
+//		else if (method.equals("RandOM")) {
+//			FirstOrderMetropolisRandOM randOM = new FirstOrderMetropolisRandOM(m, db, labelsDB, config);
+//			randOM.learn();
+//		}
 		else if (method.equals("SET_TO_ONE")) {
 			for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 				k.setWeight(new PositiveWeight(1.0));
@@ -80,7 +59,9 @@ public class WeightLearner {
 		}
 		else if (method.equals("NONE"))
 			;
-		else
+		else {
 			log.error("Invalid method ");
+			throw new ClassNotFoundException("Weight learning method " + method + " not found");
+		}
 	}
 }
