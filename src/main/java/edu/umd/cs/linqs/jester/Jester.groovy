@@ -114,10 +114,10 @@ m.add predicate: "simJokeText", types: [ArgumentType.UniqueID,ArgumentType.Uniqu
 //m.add rule: avgJokeRating(J) >> avgJokeRatingObs(J), weight: 1.0, squared: sq;
 
 // If U1,U2 have similar taste, then they will rate J similarly
-//m.add rule: ( user(U1) & user(U2) & simObsTaste(U1,U2) & rating(U1,J) ) >> rating(U2,J), weight: 1.0, squared: sq;
+//m.add rule: ( simObsTaste(U1,U2) & rating(U1,J) ) >> rating(U2,J), weight: 1.0, squared: sq;
 
 // If J1,J2 have similar ratings, then U will rate them similarly
-m.add rule: ( joke(J1) & joke(J2) & simObsRating(J1,J2) & rating(U,J1) ) >> rating(U,J2), weight: 1.0, squared: sq;
+m.add rule: ( simObsRating(J1,J2) & rating(U,J1) ) >> rating(U,J2), weight: 1.0, squared: sq;
 
 // If J1,J2 have similar text, then U will rate them similarly
 //m.add rule: ( jokeText(J1,T1) & jokeText(J2,T2) & simJokeText(T1,T2) & rating(U,J1) ) >> rating(U,J2), weight: 1.0, squared: sq;
@@ -220,8 +220,8 @@ for (int fold = 0; fold < folds; fold++) {
 	def toClose;
 	ProjectionAverage userAverager = new ProjectionAverage(ratingObs, 1);
 	ProjectionAverage jokeAverager = new ProjectionAverage(ratingObs, 0);
-	AdjCosineSimilarity userCosSim = new AdjCosineSimilarity(ratingObs, 1, avgJokeRatingObs);
-	AdjCosineSimilarity jokeCosSim = new AdjCosineSimilarity(ratingObs, 0, avgUserRatingObs);
+	AdjCosineSimilarity userCosSim = new AdjCosineSimilarity(ratingObs, 1, avgJokeRatingObs, 0.60);
+	AdjCosineSimilarity jokeCosSim = new AdjCosineSimilarity(ratingObs, 0, avgUserRatingObs, 0.60);
 
 	/* First we populate training database.
 	 * In the process, we will precompute averages ratings. 
@@ -262,17 +262,24 @@ for (int fold = 0; fold < folds; fold++) {
 	
 	/* Precompute the similarities. */
 	log.info("Computing training similarities ...")
+	int nnzSim = 0;
 	double avgsim = 0.0;
 	for (GroundTerm j1 : jokes) {
 		for (GroundTerm j2 : jokes) {
+			if (j1.equals(j2))
+				continue;
 			double s = jokeCosSim.getValue(trainDB, j1, j2);
-			RandomVariableAtom a = (RandomVariableAtom) trainDB.getAtom(simObsRating, j1, j2);
-			a.setValue(s);
-			trainDB.commit(a);
-			avgsim += s;
+			if (s > 0.0) {
+				RandomVariableAtom a = (RandomVariableAtom) trainDB.getAtom(simObsRating, j1, j2);
+				a.setValue(s);
+				trainDB.commit(a);
+				++nnzSim;
+				avgsim += s;
+			}
 		}
 	}
-	log.info("  Average joke rating sim (train): {}", avgsim / (jokes.size() * jokes.size()));
+	log.info("  Number nonzero sim (train): {}", nnzSim);
+	log.info("  Average joke rating sim (train): {}", avgsim / nnzSim);
 	//
 	//		avgsim = 0.0;
 	//		for (GroundTerm u1 : users) {
@@ -335,17 +342,24 @@ for (int fold = 0; fold < folds; fold++) {
 
 	/* Precompute the similarities. */
 	log.info("Computing testing similarities ...")
+	nnzSim = 0;
 	avgsim = 0.0;
 	for (GroundTerm j1 : jokes) {
 		for (GroundTerm j2 : jokes) {
+			if (j1.equals(j2))
+				continue;
 			double s = jokeCosSim.getValue(testDB, j1, j2);
-			RandomVariableAtom a = (RandomVariableAtom) testDB.getAtom(simObsRating, j1, j2);
-			a.setValue(s);
-			testDB.commit(a);
-			avgsim += s;
+			if (s > 0.0) {
+				RandomVariableAtom a = (RandomVariableAtom) testDB.getAtom(simObsRating, j1, j2);
+				a.setValue(s);
+				testDB.commit(a);
+				++nnzSim;
+				avgsim += s;
+			}
 		}
 	}
-	log.info("  Average joke rating sim (test): {}", avgsim / (jokes.size() * jokes.size()));
+	log.info("  Number nonzero sim (train): {}", nnzSim);
+	log.info("  Average joke rating sim (train): {}", avgsim / nnzSim);
 	//	avgsim = 0.0;
 	//	for (GroundTerm u1 : users) {
 	//		for (GroundTerm u2 : users) {
@@ -396,7 +410,7 @@ for (int fold = 0; fold < folds; fold++) {
 			comparator.setMetric(metrics.get(i))
 			score[i] = comparator.compare(rating)
 		}
-		log.info("Fold {} : {} : MSE {} : MAE {}", fold, configName, score[0], score[1]);
+		log.warn("Fold {} : {} : MSE {} : MAE {}", fold, configName, score[0], score[1]);
 		expResults.get(config).add(fold, score);
 		groundTruthDB.close()
 	}
