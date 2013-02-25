@@ -83,6 +83,9 @@ configGenerator.setMaxMarginNormScalingTypes([NormScalingType.NONE]);
 configGenerator.setMaxMarginSquaredSlackValues([false, true]);
 
 List<ConfigBundle> configs = configGenerator.getConfigs();
+for (ConfigBundle config : configs)
+	System.out.println(config);
+
 
 
 /*** MODEL DEFINITION ***/
