@@ -165,9 +165,9 @@ for (int fold = 0; fold < folds; fold++) {
 
 	// users
 	inserter = data.getInserter(user, read_tr);
-	InserterUtils.loadDelimitedData(inserter, dataPath + "/users-tr.txt");
+	InserterUtils.loadDelimitedData(inserter, dataPath + "/users-tr-1000.txt");
 	inserter = data.getInserter(user, read_te);
-	InserterUtils.loadDelimitedData(inserter, dataPath + "/users-te.txt");
+	InserterUtils.loadDelimitedData(inserter, dataPath + "/users-te-1000.txt");
 	// jokes
 	inserter = data.getInserter(joke, read_tr);
 	InserterUtils.loadDelimitedData(inserter, dataPath + "/jokes.txt");
@@ -379,6 +379,7 @@ for (int fold = 0; fold < folds; fold++) {
 	testDB = data.getDatabase(write_te, toClose, read_te);
 	dbPop = new DatabasePopulator(testDB);
 	dbPop.populate(new QueryAtom(rating, User, Joke), subs);
+	testDB.close();
 
 	/*** EXPERIMENT ***/
 	log.info("Starting experiment ...");
@@ -393,16 +394,19 @@ for (int fold = 0; fold < folds; fold++) {
 		log.info("Learned model {}: \n {}", configName, m.toString())
 
 		/* Inference on test set */
-		Set<GroundAtom> allAtoms = Queries.getAllAtoms(testDB, rating)
+		Database predDB = data.getDatabase(write_te, toClose, read_te);
+		Set<GroundAtom> allAtoms = Queries.getAllAtoms(predDB, rating)
 		for (RandomVariableAtom atom : Iterables.filter(allAtoms, RandomVariableAtom))
 			atom.setValue(0.0)
-		MPEInference mpe = new MPEInference(m, testDB, config)
+		MPEInference mpe = new MPEInference(m, predDB, config)
 		FullInferenceResult result = mpe.mpeInference()
 		log.info("Objective: {}", result.getTotalWeightedIncompatibility())
+		predDB.close();
 	
 		/* Evaluation */
+		predDB = data.getDatabase(write_te);
 		Database groundTruthDB = data.getDatabase(labels_te, [rating] as Set)
-		def comparator = new ContinuousPredictionComparator(testDB)
+		def comparator = new ContinuousPredictionComparator(predDB)
 		comparator.setBaseline(groundTruthDB)
 		def metrics = [ContinuousPredictionComparator.Metric.MSE, ContinuousPredictionComparator.Metric.MAE]
 		double [] score = new double[metrics.size()]
@@ -412,6 +416,7 @@ for (int fold = 0; fold < folds; fold++) {
 		}
 		log.warn("Fold {} : {} : MSE {} : MAE {}", fold, configName, score[0], score[1]);
 		expResults.get(config).add(fold, score);
+		predDB.close();
 		groundTruthDB.close()
 	}
 	trainDB.close()
