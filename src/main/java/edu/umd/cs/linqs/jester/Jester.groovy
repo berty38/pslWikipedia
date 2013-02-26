@@ -73,14 +73,14 @@ methods = ["MLE","MPLE","MM"];
 configGenerator.setLearningMethods(methods);
 
 /* MLE/MPLE options */
-configGenerator.setVotedPerceptronStepCounts([20, 50, 100]);
+configGenerator.setVotedPerceptronStepCounts([50, 100]);
 configGenerator.setVotedPerceptronStepSizes([(double) 1.0]);
 
 /* MM options */
 configGenerator.setMaxMarginSlackPenalties([(double) 0.1, (double) 0.5, (double) 1.0]);
 configGenerator.setMaxMarginLossBalancingTypes([LossBalancingType.NONE]);
 configGenerator.setMaxMarginNormScalingTypes([NormScalingType.NONE]);
-configGenerator.setMaxMarginSquaredSlackValues([false, true]);
+configGenerator.setMaxMarginSquaredSlackValues([false]);
 
 List<ConfigBundle> configs = configGenerator.getConfigs();
 for (ConfigBundle config : configs)
@@ -124,7 +124,7 @@ m.add rule: ( simObsRating(J1,J2) & rating(U,J1) ) >> rating(U,J2), weight: 1.0,
 
 // If J1,J2 have similar text, then U will rate them similarly
 //m.add rule: ( jokeText(J1,T1) & jokeText(J2,T2) & simJokeText(T1,T2) & rating(U,J1) ) >> rating(U,J2), weight: 1.0, squared: sq;
-m.add rule: ( simJokeText(J1,J2) & rating(U,J1) ) >> rating(U,J2), weight: 1.0, squared: sq;
+//m.add rule: ( simJokeText(J1,J2) & rating(U,J1) ) >> rating(U,J2), weight: 1.0, squared: sq;
 
 // Ratings should concentrate around observed user/joke averages
 m.add rule: ( user(U) & joke(J) & avgUserRatingObs(U) ) >> rating(U,J), weight: 1.0, squared: sq;
