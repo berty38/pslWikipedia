@@ -48,12 +48,11 @@ testLeft = true
 // train on randomly sampled pixels
 trainOnRandom = true
 // number of training faces
-numTraining = 50
+numTraining = 100
 // number of testing faces
 numTesting = 50
-// max prediction resolution
-maxGridResolution = 100
 
+dataset = "caltech"
 
 if (args.length >= 2) {
 	if (args[0] == "bottom") {
@@ -71,6 +70,8 @@ if (args.length >= 2) {
 		log.info("Training on randomly held-out pixels")
 	}
 }
+
+def expSetup = (testLeft? "left" : "bottom") + "-" + (trainOnRandom? "rand" : "same")
 
 /*
  * SET LEARNING ALGORITHMS
@@ -93,7 +94,7 @@ vpStepSizes = [5]
 ConfigManager cm = ConfigManager.getManager()
 ConfigBundle baseConfig = cm.getBundle("vision")
 
-boolean sq = true
+boolean sq = false
 
 /*
  * DEFINES EXPERIMENT CONFIGURATIONS
@@ -132,8 +133,9 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++)
 /*
  * INITIALIZES DATASTORE AND MODEL
  */
-def defaultPath = System.getProperty("java.io.tmpdir") + "/"
-String dbpath = baseConfig.getString("dbpath", defaultPath + "pslCaltech")
+//def defaultPath = System.getProperty("java.io.tmpdir") + "/"
+def defaultPath = "/scratch0/bert-uai13/"
+String dbpath = baseConfig.getString("dbpath", defaultPath + "psl" + dataset)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), baseConfig)
 //DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Memory, dbpath, true), baseConfig)
 
@@ -143,94 +145,71 @@ PSLModel m = new PSLModel(this, data)
  * DEFINE MODEL
  */
 
-width = 100
-height = 100
+width = 64
+height = 64
 branching = 2
 depth = 7
 def hierarchy = new PatchStructure(width, height, branching, depth, baseConfig)
-hierarchy.generateHierarchy()
+hierarchy.generatePixels()
 
 
 m.add predicate: "north", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "east", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "horizontalMirror", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "verticalMirror", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
-m.add predicate: "children", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "neighbors", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
-m.add predicate: "level", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "pixelBrightness", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "picture", types: [ArgumentType.UniqueID]
-
-m.add setcomparison: "brightness", on: pixelBrightness, using: SetComparison.Average
-m.createFormulaContainer("brightness", {A.children}, {P})
-//brightness({A.children}, {P})
-//m.add setcomparison: "neighborBrightness", on: brightness__1, using: SetComparison.Average
-//m.createFormulaContainer("neighborBrightness", {A.neighbors}, {P})
-
-//m.add rule : ~(pixelBrightness(A,P)), weight: 0.001, squared: sq
 
 double initialWeight = 1.0
 
 for (Patch p : hierarchy.getPatches().values()) {
 	UniqueID patch = data.getUniqueID(p.uniqueID())
-	UniqueID L = data.getUniqueID(p.getLevel())
 	Variable pic = new Variable("pictureVar")
 	Term [] args = new Term[2]
 	args[0] = patch
 	args[1] = pic
 
-	// set two-sided prior
-	//	m.add rule: (picture(pic) & level(patch,L)) >> brightness__1(patch,pic), weight: initialWeight, squared: sq
-	//	m.add rule: (picture(pic) & level(patch,L)) >> ~brightness__1(patch,pic), weight: initialWeight, squared: sq
-
-	if (p.getLevel() <= maxGridResolution) {
-		/** NEIGHBOR AGREEMENT **/
-		// north neighbor
-		if (p.hasNorth()) {
-			m.add rule: (picture(pic) & level(patch,L) & north(patch,N) & brightness__1(N,pic)) >> brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & north(patch,N) & brightness__1(N,pic)) >> ~brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & north(patch,N) & ~brightness__1(N,pic)) >> brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & north(patch,N) & ~brightness__1(N,pic)) >> ~brightness__1(patch,pic), weight: initialWeight, squared: sq
-		}
-
-		// south neighbor
-		if (p.hasSouth()) {
-			m.add rule: (picture(pic) & level(patch,L) & north(N, patch) & brightness__1(N,pic)) >> brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & north(N, patch) & brightness__1(N,pic)) >> ~brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & north(N, patch) & ~brightness__1(N,pic)) >> brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & north(N, patch) & ~brightness__1(N,pic)) >> ~brightness__1(patch,pic), weight: initialWeight, squared: sq
-		}
-
-		// east neighbor
-		if (p.hasEast()) {
-			m.add rule: (picture(pic) & level(patch,L) & east(patch,N) & brightness__1(N,pic)) >> brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & east(patch,N) & brightness__1(N,pic)) >> ~brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & east(patch,N) & ~brightness__1(N,pic)) >> brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & east(patch,N) & ~brightness__1(N,pic)) >> ~brightness__1(patch,pic), weight: initialWeight, squared: sq
-		}
-
-		// west neighbor
-		if (p.hasWest()) {
-			m.add rule: (picture(pic) & level(patch,L) & east(N, patch) & brightness__1(N,pic)) >> brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & east(N, patch) & brightness__1(N,pic)) >> ~brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & east(N, patch) & ~brightness__1(N,pic)) >> brightness__1(patch,pic), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & level(patch,L) & east(N, patch) & ~brightness__1(N,pic)) >> ~brightness__1(patch,pic), weight: initialWeight, squared: sq
-		}
-
-		m.add rule: (horizontalMirror(patch,B) & brightness__1(patch,pic)) >> brightness__1(B,pic), weight: initialWeight, squared: sq
-		m.add rule: (horizontalMirror(patch,B) & ~brightness__1(patch,pic) & picture(pic)) >> ~brightness__1(B,pic), weight: initialWeight, squared: sq
-		m.add rule: (verticalMirror(patch,B) & brightness__1(patch,pic)) >> brightness__1(B,pic), weight: initialWeight, squared: sq
-		m.add rule: (verticalMirror(patch,B) & ~brightness__1(patch,pic) & picture(pic)) >> ~brightness__1(B,pic), weight: initialWeight, squared: sq
+	/** NEIGHBOR AGREEMENT **/
+	// north neighbor
+	if (p.hasNorth()) {
+		m.add rule: (picture(pic) & north(patch,N) & pixelBrightness(N,pic)) >> pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & north(patch,N) & pixelBrightness(N,pic)) >> ~pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & north(patch,N) & ~pixelBrightness(N,pic)) >> pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & north(patch,N) & ~pixelBrightness(N,pic)) >> ~pixelBrightness(patch,pic), weight: initialWeight, squared: sq
 	}
+
+	// south neighbor
+	if (p.hasSouth()) {
+		m.add rule: (picture(pic) & north(N, patch) & pixelBrightness(N,pic)) >> pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & north(N, patch) & pixelBrightness(N,pic)) >> ~pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & north(N, patch) & ~pixelBrightness(N,pic)) >> pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & north(N, patch) & ~pixelBrightness(N,pic)) >> ~pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+	}
+
+	// east neighbor
+	if (p.hasEast()) {
+		m.add rule: (picture(pic) & east(patch,N) & pixelBrightness(N,pic)) >> pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & east(patch,N) & pixelBrightness(N,pic)) >> ~pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & east(patch,N) & ~pixelBrightness(N,pic)) >> pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & east(patch,N) & ~pixelBrightness(N,pic)) >> ~pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+	}
+
+	// west neighbor
+	if (p.hasWest()) {
+		m.add rule: (picture(pic) & east(N, patch) & pixelBrightness(N,pic)) >> pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & east(N, patch) & pixelBrightness(N,pic)) >> ~pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & east(N, patch) & ~pixelBrightness(N,pic)) >> pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & east(N, patch) & ~pixelBrightness(N,pic)) >> ~pixelBrightness(patch,pic), weight: initialWeight, squared: sq
+	}
+
+	m.add rule: (horizontalMirror(patch,B) & pixelBrightness(patch,pic)) >> pixelBrightness(B,pic), weight: initialWeight, squared: sq
+	m.add rule: (horizontalMirror(patch,B) & ~pixelBrightness(patch,pic) & picture(pic)) >> ~pixelBrightness(B,pic), weight: initialWeight, squared: sq
+	m.add rule: (verticalMirror(patch,B) & pixelBrightness(patch,pic)) >> pixelBrightness(B,pic), weight: initialWeight, squared: sq
+	m.add rule: (verticalMirror(patch,B) & ~pixelBrightness(patch,pic) & picture(pic)) >> ~pixelBrightness(B,pic), weight: initialWeight, squared: sq
 }
 
-
-// save all initial weights
-Map<CompatibilityKernel,Weight> weights = new HashMap<CompatibilityKernel, Weight>()
-for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-	weights.put(k, k.getWeight());
-
-log.info("Model has {} weighted kernels", weights.size());
+log.info("Model has {} weighted kernels", m.getKernels().size());
 
 Partition trainObs =  new Partition(0)
 Partition testObs = new Partition(1)
@@ -258,6 +237,9 @@ for (int x = 0; x < width; x++) {
 			mask[c] = y <= height / 2
 
 		negMask[c] = !mask[c]
+
+		trainMask[c] = mask[c]
+		negTrainMask[c] = negMask[c]
 		c++
 	}
 }
@@ -268,13 +250,10 @@ for (Partition part : [trainObs, testObs]) {
 	ImagePatchUtils.insertFromPatchMap(east, readDB, hierarchy.getEast())
 	ImagePatchUtils.insertFromPatchMap(horizontalMirror, readDB, hierarchy.getMirrorHorizontal())
 	ImagePatchUtils.insertFromPatchMap(verticalMirror, readDB, hierarchy.getMirrorVertical())
-	//		ImagePatchUtils.insertNeighbors(neighbors, readDB, hierarchy)
-	ImagePatchUtils.insertPatchLevels(readDB, hierarchy, level)
-	ImagePatchUtils.insertPixelPatchChildren(children, readDB, hierarchy)
 	readDB.close()
 }
 
-ArrayList<double []> images = ImagePatchUtils.loadImages(dataDir + "/caltech01.txt", width, height)
+ArrayList<double []> images = ImagePatchUtils.loadImages(dataDir + "/" + dataset + "01.txt", width, height)
 // create list of train images and test images
 ArrayList<double []> trainImages = new ArrayList<double[]>()
 ArrayList<double []> testImages = new ArrayList<double[]>()
@@ -285,6 +264,8 @@ for (int i = 0; i < images.size(); i++) {
 	else if (i >= images.size() - numTesting)
 		testImages.add(images.get(i))
 }
+
+images.clear()
 
 Inserter picInserter = data.getInserter(picture, trainObs)
 for (int i = 0; i < trainImages.size(); i++) {
@@ -305,29 +286,20 @@ def trainLabelDB = data.getDatabase(trainLabel)
 def trainWriteDB = data.getDatabase(trainWrite)
 for (int i = 0; i < trainImages.size(); i++) {
 
-	c = 0
-	for (int x = 0; x < width; x++) {
-		for (int y = 0; y < height; y++) {
-			if (trainOnRandom) {
+	if (trainOnRandom) {
+		c = 0
+		for (int x = 0; x < width; x++) {
+			for (int y = 0; y < height; y++) {
 				trainMask[c] = rand.nextBoolean()
-			} else
-				trainMask[c] = mask[c]
-			negTrainMask[c] = !trainMask[c]
-			c++
+				negTrainMask[c] = !trainMask[c]
+				c++
+			}
 		}
 	}
 
 	UniqueID id = data.getUniqueID(i)
 	ImagePatchUtils.setPixels(pixelBrightness, id, trainReadDB, hierarchy, width, height, trainImages.get(i), trainMask)
 	ImagePatchUtils.setPixels(pixelBrightness, id, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
-
-	ImagePatchUtils.populateAllPatches(brightness__1, id, trainWriteDB, hierarchy)
-	ImagePatchUtils.populateAllPatches(brightness__1, id, trainLabelDB, hierarchy)
-	//	ImagePatchUtils.populateAllPatches(neighborBrightness__2, id, trainWriteDB, hierarchy)
-	//	ImagePatchUtils.populateAllPatches(neighborBrightness__2, id, trainLabelDB, hierarchy)
-
-	ImagePatchUtils.computePatchBrightness(brightness__1, pixelBrightness, trainLabelDB, id, hierarchy, trainImages.get(i))
-	//	ImagePatchUtils.computeNeighborBrightness(neighborBrightness__2, brightness__1, neighbors, trainLabelDB, id, hierarchy)
 }
 trainWriteDB.close()
 trainReadDB.close()
@@ -340,14 +312,6 @@ for (int i = 0; i < testImages.size(); i++) {
 	def id = data.getUniqueID(i)
 	ImagePatchUtils.setPixels(pixelBrightness, id, testReadDB, hierarchy, width, height, testImages.get(i), mask)
 	ImagePatchUtils.setPixels(pixelBrightness, id, testLabelDB, hierarchy, width, height, testImages.get(i), negMask)
-
-	ImagePatchUtils.populateAllPatches(brightness__1, id, testWriteDB, hierarchy)
-	ImagePatchUtils.populateAllPatches(brightness__1, id, testLabelDB, hierarchy)
-	//	ImagePatchUtils.populateAllPatches(neighborBrightness__2, id, testWriteDB, hierarchy)
-	//	ImagePatchUtils.populateAllPatches(neighborBrightness__2, id, testLabelDB, hierarchy)
-
-	ImagePatchUtils.computePatchBrightness(brightness__1, pixelBrightness, testLabelDB, id, hierarchy, testImages.get(i))
-	//	ImagePatchUtils.computeNeighborBrightness(neighborBrightness__2, brightness__1, neighbors, testLabelDB, id, hierarchy)
 }
 testWriteDB.close()
 testReadDB.close()
@@ -359,15 +323,10 @@ def scores = new ArrayList<Double>()
 for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 
 	/** open databases **/
-	def labelClose = [pixelBrightness, brightness__1] as Set
-	def toClose = [north, east, horizontalMirror, verticalMirror, children, level, picture] as Set
+	def labelClose = [pixelBrightness] as Set
+	def toClose = [north, east, horizontalMirror, verticalMirror, picture] as Set
 	def trainDB = data.getDatabase(trainWrite, toClose, trainObs)
-	def testDB = data.getDatabase(testWrite, toClose, testObs)
 	def labelDB = data.getDatabase(trainLabel, labelClose)
-	def groundTruthDB = data.getDatabase(testLabel, labelClose)
-
-	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-		k.setWeight(weights.get(k))
 
 	/*
 	 * Weight learning
@@ -383,6 +342,8 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 	trainDB.close()
 	labelDB.close()
 
+	def testDB = data.getDatabase(testWrite, toClose, testObs)
+
 	/*
 	 * Inference on test set
 	 */
@@ -393,14 +354,13 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 	MPEInference mpe = new MPEInference(m, testDB, baseConfig)
 	FullInferenceResult result = mpe.mpeInference()
 	System.out.println("Objective: " + result.getTotalWeightedIncompatibility())
-	def expSetup = (testLeft? "left" : "bottom") + "-" + (trainOnRandom? "same" : "rand")
-	DataOutputter.outputPredicate("output/vision/caltech-" + expSetup + "-" + methodNames.get(methodIndex) + ".txt" , testDB, pixelBrightness, ",", true, "index,image")
-
+	DataOutputter.outputPredicate("output/vision/"+ dataset + "-" + expSetup + "-" + methodNames.get(methodIndex) + ".txt" , testDB, pixelBrightness, ",", true, "index,image")
 	testDB.close()
 
 	/*
 	 * Evaluation
 	 */
+	def groundTruthDB = data.getDatabase(testLabel, labelClose)
 	testDB = data.getDatabase(testWrite)
 	def comparator = new ContinuousPredictionComparator(testDB)
 	comparator.setBaseline(groundTruthDB)
@@ -417,7 +377,6 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 	groundTruthDB.close()
 	testDB.close()
 }
-def expSetup = (testLeft? "left" : "bottom") + "-" + (trainOnRandom? "same" : "rand")
 
 for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 	methodName = methodNames.get(methodIndex)

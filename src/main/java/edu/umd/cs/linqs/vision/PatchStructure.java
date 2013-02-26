@@ -35,6 +35,34 @@ public class PatchStructure {
 		useStringIDs = config.getBoolean("rdbmsdatastore.usestringids", false);
 	}
 
+	public void generatePixels() {
+		int k = 0;
+		for (int x = 0; x < width; x++) {
+			for (int y = 0; y < height; y++) {
+				Patch current = new Patch(k, x, y, 1, 1, width, height);
+				patches.put(x + "," + y, current);
+				k++;
+			}
+		}
+		for (int x = 0; x < width; x++) {
+			for (int y = 0; y < height; y++) {
+				Patch current = patches.get(x + "," + y);
+				Patch hm = patches.get((width - x - 1) + "," + y);
+				Patch vm = patches.get(x + "," + (height - y - 1));
+				mirrorHorizontal.put(current, hm);
+				mirrorVertical.put(current, vm);
+				if (x < width - 1) {
+					Patch neighbor = patches.get((x + 1) + "," + y);
+					east.put(current,  neighbor);
+				} 
+				if (y < height - 1) {
+					Patch neighbor = patches.get(x + "," + (y + 1));
+					north.put(current,  neighbor);
+				} 
+			}
+		}
+	}
+	
 	public void generateGridResolution(int resolution) {
 		ArrayList<Integer> startXs = new ArrayList<Integer>(resolution+1);
 		ArrayList<Integer> startYs = new ArrayList<Integer>(resolution+1);
@@ -272,6 +300,15 @@ public class PatchStructure {
 
 
 	public class Patch {
+		public Patch(int id, int startx, int starty, int myWidth, int myHeight, int width, int height) {
+			this.startx = startx;
+			this.starty = starty;
+			this.id = id;
+			this.patchWidth = myWidth;
+			this.patchHeight = myHeight;
+			this.imageHeight = height;
+			this.imageWidth = width;
+		}
 		public Patch(double startx, double starty, int level, double myWidth, double myHeight, double height, double width) {
 			this.startx = startx;
 			this.starty = starty;
