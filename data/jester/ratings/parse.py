@@ -33,6 +33,8 @@ while line != '':
 f.close()
 # print 'Number of users: {0}'.format(len(R))
 
+# seed random for deterministic splits
+rand.seed(311)
 
 # randomly sample users
 rand.shuffle(R)

@@ -31,6 +31,7 @@ class AdjCosineSimilarity implements ExternalFunction
 	private final Predicate p;
 	private final Predicate avg;
 	private final int dim;
+	private final double thresh;
 	
 	/**
 	 * 
@@ -42,8 +43,21 @@ class AdjCosineSimilarity implements ExternalFunction
 		this.p = p;
 		this.avg = avg;
 		this.dim = dim;
-		
-		
+		this.thresh = 0;
+	}
+
+	/**
+	 * 
+	 * @param p Binary predicate whose truth value is to be used to compute similarity
+	 * @param dim Index of free variable (zero-based): must be {0, 1}
+	 * @param avg Predicate containing average value 
+	 * @param thresh Threshold below which the returned similarity is zero 
+	 */
+	public AdjCosineSimilarity(Predicate p, int dim, Predicate avg, double thresh) {
+		this.p = p;
+		this.avg = avg;
+		this.dim = dim;
+		this.thresh = thresh;
 	}
 	
 	@Override
@@ -110,10 +124,14 @@ class AdjCosineSimilarity implements ExternalFunction
 		if (denom1 == 0.0 || denom2 == 0.0)
 			return 0;
 		
-		/* return similarity (clamped to [0,1]) */
+		/* Similarity (clamped to [0,1]) */
 		double sim = numer / (Math.sqrt(denom1) * Math.sqrt(denom2));
 		sim = (sim + 1) / 2;
-		return Math.max(0, Math.min(1, sim));
+		sim = Math.max(0, Math.min(1, sim));
+		/* Threshold similarity */
+		if (sim < thresh)
+			return 0.0;
+		return sim;
 	}
 
 	public double getValue(Database db, GroundTerm... args) {
@@ -169,10 +187,14 @@ class AdjCosineSimilarity implements ExternalFunction
 		if (denom1 == 0.0 || denom2 == 0.0)
 			return 0;
 		
-		/* return similarity (clamped to [0,1]) */
+		/* Similarity (clamped to [0,1]) */
 		double sim = numer / (Math.sqrt(denom1) * Math.sqrt(denom2));
 		sim = (sim + 1) / 2;
-		return Math.max(0, Math.min(1, sim));
+		sim = Math.max(0, Math.min(1, sim));
+		/* Threshold similarity */
+		if (sim < thresh)
+			return 0.0;
+		return sim;
 	}
 
 }

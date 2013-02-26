@@ -1,6 +1,22 @@
 #!/usr/bin/python
 
-import re, math
+import re, math, sys
+
+# get command line args
+if len(sys.argv) < 2:
+	print 'USAGE: python computeSim.py <outFile> [ <thresh: off=0,avg=1,avg+std=2> <rescale: off=0,on=1> ]'
+	exit()
+outFile = sys.argv[1]
+threshold = 0
+if len(sys.argv) >= 3:
+	flag = int(sys.argv[2])
+	if flag in [0,1,2]:
+		threshold = flag
+rescale = 0
+if len(sys.argv) >= 4:
+	flag = int(sys.argv[3])
+	if flag in [0,1]:
+		rescale = flag
 
 # constants
 topn = 100
@@ -89,37 +105,44 @@ print 'Maximum similarity: {}'.format(maxsim)
 print 'Average similarity: {}'.format(avgsim)
 print 'Std Dev similarity: {}'.format(stdsim)
 
-# threshold and rescale
-# thresh = avgsim #+ stdsim
-# range = maxsim - thresh
-# newminsim = 1
-# newmaxsim = 0
-# newavgsim = 0
-# nnz = 0
-# for j1 in sim:
-# 	for j2 in sim[j1]:
-# 		s = sim[j1][j2]
-# 		s = (s - thresh) / range
-# 		s = min(1, max(0, s))
-# 		sim[j1][j2] = s
-# 		if s < newminsim: newminsim = s
-# 		if s > newmaxsim: newmaxsim = s
-# 		newavgsim += s
-# 		if s != 0: nnz += 1
-# newavgsim /= nnz #len(jokes) * (len(jokes)-1)
-# var = 0
-# for j1 in sim:
-# 	for j2 in sim[j1]:
-# 		var += (sim[j1][j2] - newavgsim) * (sim[j1][j2] - newavgsim)
-# var /= nnz #len(jokes) * (len(jokes)-1)
-# newstdsim = math.sqrt(var)
-# print 'New Minimum similarity: {}'.format(newminsim)
-# print 'New Maximum similarity: {}'.format(newmaxsim)
-# print 'New Average similarity: {}'.format(newavgsim)
-# print 'New Std Dev similarity: {}'.format(newstdsim)
+# threshold (and rescale?)
+if threshold > 0:
+	thresh = avgsim
+	if threshold == 2:
+		thresh += stdsim
+	range = maxsim - thresh
+	newminsim = 1
+	newmaxsim = 0
+	newavgsim = 0
+	nnz = 0
+	for j1 in sim:
+		for j2 in sim[j1]:
+			s = sim[j1][j2]
+			if rescale == 1:
+				s = (s - thresh) / range
+				s = min(1, max(0, s))			
+			else:
+				if s < thresh:
+					s = 0
+			sim[j1][j2] = s
+			if s < newminsim: newminsim = s
+			if s > newmaxsim: newmaxsim = s
+			newavgsim += s
+			if s != 0: nnz += 1
+	newavgsim /= nnz #len(jokes) * (len(jokes)-1)
+	var = 0
+	for j1 in sim:
+		for j2 in sim[j1]:
+			var += (sim[j1][j2] - newavgsim) * (sim[j1][j2] - newavgsim)
+	var /= nnz #len(jokes) * (len(jokes)-1)
+	newstdsim = math.sqrt(var)
+	print 'New Minimum similarity: {}'.format(newminsim)
+	print 'New Maximum similarity: {}'.format(newmaxsim)
+	print 'New Average similarity: {}'.format(newavgsim)
+	print 'New Std Dev similarity: {}'.format(newstdsim)
 
 # write to file
-f = open('jokeTextSim.txt','w')
+f = open(outFile,'w')
 for j1 in sim:
 	for j2 in sim[j1]:
 		if sim[j1][j2] != 0:
