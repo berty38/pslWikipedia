@@ -107,7 +107,7 @@ m.add predicate: "ratingPrior", types: [ArgumentType.UniqueID];
 //m.add predicate: "jokeText", types: [ArgumentType.UniqueID,ArgumentType.String];
 m.add predicate: "avgUserRatingObs", types: [ArgumentType.UniqueID];
 m.add predicate: "avgJokeRatingObs", types: [ArgumentType.UniqueID];
-m.add predicate: "simObsTaste", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
+//m.add predicate: "simObsTaste", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 m.add predicate: "simObsRating", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 m.add predicate: "simJokeText", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 
@@ -122,7 +122,7 @@ m.add predicate: "simJokeText", types: [ArgumentType.UniqueID,ArgumentType.Uniqu
 // If U1,U2 have similar taste, then they will rate J similarly
 //m.add rule: ( simObsTaste(U1,U2) & rating(U1,J) ) >> rating(U2,J), weight: 1.0, squared: sq;
 
-// If J1,J2 have similar ratings, then U will rate them similarly
+// If J1,J2 have similar observed ratings, then U will rate them similarly
 m.add rule: ( simObsRating(J1,J2) & rating(U,J1) ) >> rating(U,J2), weight: 1.0, squared: sq;
 
 // If J1,J2 have similar text, then U will rate them similarly
@@ -308,7 +308,7 @@ for (int fold = 0; fold < folds; fold++) {
 	trainDB.close();
 
 	log.info("Populating training database ...");
-	toClose = [user,joke,ratingObs,ratingPrior,simJokeText,avgUserRatingObs,avgJokeRatingObs,simObsTaste,simObsRating] as Set;
+	toClose = [user,joke,ratingObs,ratingPrior,simJokeText,avgUserRatingObs,avgJokeRatingObs,simObsRating] as Set;
 	trainDB = data.getDatabase(write_tr, toClose, read_tr);
 	dbPop = new DatabasePopulator(trainDB);
 	dbPop.populate(new QueryAtom(rating, User, Joke), subs);
@@ -394,7 +394,7 @@ for (int fold = 0; fold < folds; fold++) {
 
 	/* Populate testing database. */
 	log.info("Populating testing database ...");
-	toClose = [user,joke,ratingObs,ratingPrior,simJokeText,avgUserRatingObs,avgJokeRatingObs,simObsTaste,simObsRating] as Set;
+	toClose = [user,joke,ratingObs,ratingPrior,simJokeText,avgUserRatingObs,avgJokeRatingObs,simObsRating] as Set;
 	testDB = data.getDatabase(write_te, toClose, read_te);
 	dbPop = new DatabasePopulator(testDB);
 	dbPop.populate(new QueryAtom(rating, User, Joke), subs);
