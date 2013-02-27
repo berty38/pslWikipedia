@@ -49,8 +49,7 @@ DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true
 folds = 10
 
 def sq = cb.getBoolean("squared", true);
-
-def simThresh = 0.5;
+def simThresh = cb.getDouble("simThresh", 0.5);
 
 ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("jester");
 
