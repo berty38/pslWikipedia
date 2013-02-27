@@ -50,6 +50,8 @@ folds = 10
 
 def sq = cb.getBoolean("squared", true);
 
+def simThresh = 0.5;
+
 ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("jester");
 
 /*
@@ -73,11 +75,13 @@ methods = ["MLE","MPLE","MM"];
 configGenerator.setLearningMethods(methods);
 
 /* MLE/MPLE options */
-configGenerator.setVotedPerceptronStepCounts([50, 100]);
+//configGenerator.setVotedPerceptronStepCounts([50, 100]);
+configGenerator.setVotedPerceptronStepCounts([100]);
 configGenerator.setVotedPerceptronStepSizes([(double) 1.0]);
 
 /* MM options */
-configGenerator.setMaxMarginSlackPenalties([(double) 0.1, (double) 0.5, (double) 1.0]);
+//configGenerator.setMaxMarginSlackPenalties([(double) 0.1, (double) 0.5, (double) 1.0]);
+configGenerator.setMaxMarginSlackPenalties([(double) 0.1]);
 configGenerator.setMaxMarginLossBalancingTypes([LossBalancingType.NONE]);
 configGenerator.setMaxMarginNormScalingTypes([NormScalingType.NONE]);
 configGenerator.setMaxMarginSquaredSlackValues([false]);
@@ -223,8 +227,8 @@ for (int fold = 0; fold < folds; fold++) {
 	def toClose;
 	ProjectionAverage userAverager = new ProjectionAverage(ratingObs, 1);
 	ProjectionAverage jokeAverager = new ProjectionAverage(ratingObs, 0);
-	AdjCosineSimilarity userCosSim = new AdjCosineSimilarity(ratingObs, 1, avgJokeRatingObs, 0.60);
-	AdjCosineSimilarity jokeCosSim = new AdjCosineSimilarity(ratingObs, 0, avgUserRatingObs, 0.60);
+	AdjCosineSimilarity userCosSim = new AdjCosineSimilarity(ratingObs, 1, avgJokeRatingObs, simThresh);
+	AdjCosineSimilarity jokeCosSim = new AdjCosineSimilarity(ratingObs, 0, avgUserRatingObs, simThresh);
 
 	/* First we populate training database.
 	 * In the process, we will precompute averages ratings. 
@@ -267,15 +271,22 @@ for (int fold = 0; fold < folds; fold++) {
 	log.info("Computing training similarities ...")
 	int nnzSim = 0;
 	double avgsim = 0.0;
-	for (GroundTerm j1 : jokes) {
-		for (GroundTerm j2 : jokes) {
-			if (j1.equals(j2))
-				continue;
+	List<GroundTerm> jokeList = new ArrayList(jokes);
+	for (int i = 0; i < jokeList.size(); i++) {
+		GroundTerm j1 = jokeList.get(i);
+		for (int j = i+1; j < jokeList.size(); j++) {
+			GroundTerm j2 = jokeList.get(j);
 			double s = jokeCosSim.getValue(trainDB, j1, j2);
 			if (s > 0.0) {
+				/* upper half */
 				RandomVariableAtom a = (RandomVariableAtom) trainDB.getAtom(simObsRating, j1, j2);
 				a.setValue(s);
 				trainDB.commit(a);
+				/* lower half */
+				a = (RandomVariableAtom) trainDB.getAtom(simObsRating, j2, j1);
+				a.setValue(s);
+				trainDB.commit(a);
+				/* update stats */
 				++nnzSim;
 				avgsim += s;
 			}
@@ -347,15 +358,21 @@ for (int fold = 0; fold < folds; fold++) {
 	log.info("Computing testing similarities ...")
 	nnzSim = 0;
 	avgsim = 0.0;
-	for (GroundTerm j1 : jokes) {
-		for (GroundTerm j2 : jokes) {
-			if (j1.equals(j2))
-				continue;
+	for (int i = 0; i < jokeList.size(); i++) {
+		GroundTerm j1 = jokeList.get(i);
+		for (int j = i+1; j < jokeList.size(); j++) {
+			GroundTerm j2 = jokeList.get(j);
 			double s = jokeCosSim.getValue(testDB, j1, j2);
 			if (s > 0.0) {
+				/* upper half */
 				RandomVariableAtom a = (RandomVariableAtom) testDB.getAtom(simObsRating, j1, j2);
 				a.setValue(s);
 				testDB.commit(a);
+				/* lower half */
+				a = (RandomVariableAtom) testDB.getAtom(simObsRating, j2, j1);
+				a.setValue(s);
+				testDB.commit(a);
+				/* update stats */
 				++nnzSim;
 				avgsim += s;
 			}
