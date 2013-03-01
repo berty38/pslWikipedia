@@ -348,7 +348,9 @@ for (int fold = 0; fold < folds; fold++) {
 		for (RandomVariableAtom atom : Iterables.filter(allAtoms, RandomVariableAtom))
 			atom.setValue(0.0)
 		MPEInference mpe = new MPEInference(m, testDB, cb)
+		log.info("* Starting test inference *");
 		FullInferenceResult result = mpe.mpeInference()
+		log.info("* Finished test inference * {}", config.getString("name", ""))
 		System.out.println("Objective: " + result.getTotalWeightedIncompatibility())
 
 		/* Evaluation */
