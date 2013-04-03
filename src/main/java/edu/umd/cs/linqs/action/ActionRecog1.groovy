@@ -49,7 +49,6 @@ DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true
 folds = 44
 
 def sq = cb.getBoolean("squared", true);
-def simThresh = cb.getDouble("simThresh", 0.5);
 
 ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("action");
 
@@ -74,7 +73,6 @@ methods = ["MLE","MPLE","MM"];
 configGenerator.setLearningMethods(methods);
 
 /* MLE/MPLE options */
-//configGenerator.setVotedPerceptronStepCounts([50, 100]);
 configGenerator.setVotedPerceptronStepCounts([100]);
 configGenerator.setVotedPerceptronStepSizes([(double) 1.0]);
 
@@ -104,27 +102,45 @@ actionNames = ["crossing","standing","queueing","walking","talking"];
 /* PREDICATES */
 
 // types (might not need some of these)
-m.add predicate: "sequence", types: [ArgumentType.UniqueID];
 m.add predicate: "frame", types: [ArgumentType.UniqueID];
 m.add predicate: "bbox", types: [ArgumentType.UniqueID];
-m.add predicate: "action", types: [ArgumentType.UniqueID];
 
 // target
-m.add predicate: "action", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
+m.add predicate: "doing", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 m.add predicate: "sameObj", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 
 // observed
-m.add predicate: "adjFrame", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
-m.add predicate: "inFrame", types: [ArgumentType.UniqueID,ArgumentType.UniqueID,ArgumentType.UniqueID];
+m.add predicate: "adjFrames", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
+m.add predicate: "inFrame", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
+m.add predicate: "inSameFrame", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 m.add predicate: "dims", types: [ArgumentType.UniqueID,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer];
-m.add predicate: "hogAction", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
-m.add predicate: "acdAction", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
+m.add predicate: "hogAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
+m.add predicate: "acdAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 
 // derived
-m.add predicate: "dist", types: [ArgumentType.UniqueID,ArgumentType.UniqueID], implementation: new SimilarityFunc();
+m.add function: "near", implementation: new NearFunction();
+m.add function: "far", implementation: new DistanceFunction();
 
 /* RULES */
 
+// In-frame rules
+for (int a1 : actions) {
+	// HOG-based SVM probabilities
+	m.add rule: hogAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
+	// ACD-based SVM probabilities
+	m.add rule: acdAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
+	// Relational rules
+	for (int a2 : actions) {
+		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is NEAR, then BB2 is doing action a2.
+		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & near(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
+		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is FAR, then BB2 is doing action a2.
+		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
+	}
+	//TODO: Priors on actions?
+}
+
+// Between-frame rules
+m.add rule: (  ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
 
 log.info("Model: {}", m)
 
@@ -133,6 +149,7 @@ Map<CompatibilityKernel,Weight> initWeights = new HashMap<CompatibilityKernel, W
 for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 	initWeights.put(k, k.getWeight());
 
+return 0;
 
 /*** LOAD DATA ***/
 

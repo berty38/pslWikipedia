@@ -127,7 +127,7 @@ public class ExperimentConfigGenerator {
 						for (LossBalancingType lossBalancing : maxMarginLossBalancingTypes) {
 							for (NormScalingType normScaling : maxMarginNormScalingTypes) {
 								for (boolean squareSlack : maxMarginSquaredSlackValues) {
-									ConfigBundle newBundle = cm.getBundle("epinions");
+									ConfigBundle newBundle = cm.getBundle(baseConfigName);
 									newBundle.addProperty("learningmethod", learningMethod);
 									newBundle.addProperty(MaxMargin.SLACK_PENALTY_KEY, slackPenalty);
 									newBundle.addProperty(MaxMargin.BALANCE_LOSS_KEY, lossBalancing);
