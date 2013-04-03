@@ -22,14 +22,14 @@ class DistanceFunction implements ExternalFunction {
 	@Override
 	public double getValue(ReadOnlyDatabase db, GroundTerm... args) {
 		/* Get args */
-		Integer x1 = ((IntegerAttribute) args[0]).getValue().intValue();
-		Integer x2 = ((IntegerAttribute) args[1]).getValue().intValue();
-		Integer y1 = ((IntegerAttribute) args[2]).getValue().intValue();
-		Integer y2 = ((IntegerAttribute) args[3]).getValue().intValue();
-		Integer w1 = ((IntegerAttribute) args[4]).getValue().intValue();
-		Integer w2 = ((IntegerAttribute) args[5]).getValue().intValue();
-		Integer h1 = ((IntegerAttribute) args[6]).getValue().intValue();
-		Integer h2 = ((IntegerAttribute) args[7]).getValue().intValue();
+		int x1 = ((IntegerAttribute) args[0]).getValue().intValue();
+		int x2 = ((IntegerAttribute) args[1]).getValue().intValue();
+		int y1 = ((IntegerAttribute) args[2]).getValue().intValue();
+		int y2 = ((IntegerAttribute) args[3]).getValue().intValue();
+		int w1 = ((IntegerAttribute) args[4]).getValue().intValue();
+		int w2 = ((IntegerAttribute) args[5]).getValue().intValue();
+		int h1 = ((IntegerAttribute) args[6]).getValue().intValue();
+		int h2 = ((IntegerAttribute) args[7]).getValue().intValue();
 
 		//TODO: compute distance between bounding boxes
 		
@@ -46,12 +46,5 @@ class DistanceFunction implements ExternalFunction {
 		return argTypes;
 	}
 
-}
-
-class NearFunction extends DistanceFunction {
-	@Override
-	public double getValue(ReadOnlyDatabase db, GroundTerm... args) {
-		return 1.0 - super.getValue(db, args);
-	}
 }
 

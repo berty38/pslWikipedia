@@ -1,7 +1,11 @@
 
+clear
+
+maxFrames = 1000;
+maxBoxes = 100;
+
 %% 5-action Dataset
 
-clear
 load file1.mat
 
 actions = 1:5;
@@ -16,12 +20,18 @@ fid_acdaction = fopen([fid_pfx 'acdaction.txt'], 'w');
 fid_sameobj = fopen([fid_pfx 'sameobj.txt'], 'w');
 
 for s=1:length(anno)
+	if length(anno{s}) > maxFrames
+		error('Too many frames in seq %d: %d frames', s, length(anno{s}))
+	end
 	for f=1:length(anno{s})
-		frid = s*100 + f;
+		frid = s*maxFrames + f;
 		inframe = [];
+		if length(anno{s}{f}) > maxBoxes
+			error('Too many boxes in seq %d, frame %d: %d boxes', s, f, length(anno{s}{f}))
+		end
 		for b=1:length(anno{s}{f})
 			% bounding box ID
-			bbid = frid*10 + b;
+			bbid = frid*maxBoxes + b;
 			% filter certain labels
 			if any(actions == anno{s}{f}(b).act)
 				inframe = [inframe bbid];
@@ -30,14 +40,14 @@ for s=1:length(anno)
 				% identity maintenance ground-truth
 				if f > 1
 					for b_=1:length(anno{s}{f-1})
-						bbid_ = s*1000 + (f-1)*10 + b_;
+						bbid_ = (frid-1)*maxBoxes + b_;
 						if anno{s}{f-1}(b_).id == anno{s}{f}(b).id
-							fprintf(fid_sameobj, '%d\t%d\t1\n', bbid_, bbid);
+							fprintf(fid_sameobj, '%d\t%d\t\n', bbid_, bbid);
 						end
 					end
 				end
 				% in-frame predicate
-				fprintf(fid_inframe, '%d\t%d\t%d\n', bbid,frid);
+				fprintf(fid_inframe, '%d\t%d\n', bbid,frid);
 				% coordinates predicate
 				fprintf(fid_coords, '%d\t%d\t%d\t%d\t%d\n', bbid, ...
 					anno{s}{f}(b).x, anno{s}{f}(b).y, ...
@@ -67,7 +77,7 @@ fclose('all');
 
 %% 6-action Dataset
 
-clear
+clear feat; clear anno; clear seqlab;
 load file2.mat
 
 actions = [1 2 3 5 6 7];
@@ -82,12 +92,18 @@ fid_acdaction = fopen([fid_pfx 'acdaction.txt'], 'w');
 fid_sameobj = fopen([fid_pfx 'sameobj.txt'], 'w');
 
 for s=1:length(anno)
+	if length(anno{s}) > maxFrames
+		error('Too many frames in seq %d: %d frames', s, length(anno{s}))
+	end
 	for f=1:length(anno{s})
-		frid = s*100 + f;
+		frid = s*maxFrames + f;
 		inframe = [];
+		if length(anno{s}{f}) > maxBoxes
+			error('Too many boxes in seq %d, frame %d: %d boxes', s, f, length(anno{s}{f}))
+		end
 		for b=1:length(anno{s}{f})
 			% bounding box ID
-			bbid = frid*10 + b;
+			bbid = frid*maxBoxes + b;
 			% filter certain labels
 			if any(actions == anno{s}{f}(b).act)
 				inframe = [inframe bbid];
@@ -96,14 +112,14 @@ for s=1:length(anno)
 				% identity maintenance ground-truth
 				if f > 1
 					for b_=1:length(anno{s}{f-1})
-						bbid_ = s*1000 + (f-1)*10 + b_;
+						bbid_ = (frid-1)*maxBoxes + b_;
 						if anno{s}{f-1}(b_).id == anno{s}{f}(b).id
-							fprintf(fid_sameobj, '%d\t%d\t1\n', bbid_, bbid);
+							fprintf(fid_sameobj, '%d\t%d\t\n', bbid_, bbid);
 						end
 					end
 				end
 				% in-frame predicate
-				fprintf(fid_inframe, '%d\t%d\t%d\n', bbid,frid);
+				fprintf(fid_inframe, '%d\t%d\n', bbid,frid);
 				% coordinates predicate
 				fprintf(fid_coords, '%d\t%d\t%d\t%d\t%d\n', bbid, ...
 					anno{s}{f}(b).x, anno{s}{f}(b).y, ...

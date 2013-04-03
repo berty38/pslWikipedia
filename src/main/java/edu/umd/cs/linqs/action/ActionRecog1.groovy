@@ -69,7 +69,8 @@ configGenerator.setModelTypes(["quad"]);
  * "MPLE" (MaxPseudoLikelihood)
  * "MM" (MaxMargin)
  */
-methods = ["MLE","MPLE","MM"];
+//methods = ["MLE","MPLE","MM"];
+methods = ["MLE"];
 configGenerator.setLearningMethods(methods);
 
 /* MLE/MPLE options */
@@ -102,28 +103,27 @@ actionNames = ["crossing","standing","queueing","walking","talking"];
 /* PREDICATES */
 
 // types (might not need some of these)
-m.add predicate: "frame", types: [ArgumentType.UniqueID];
-m.add predicate: "bbox", types: [ArgumentType.UniqueID];
+//m.add predicate: "frame", types: [ArgumentType.UniqueID];
+//m.add predicate: "bbox", types: [ArgumentType.UniqueID];
+//m.add predicate: "action", types: [ArgumentType.UniqueID];
 
 // target
 m.add predicate: "doing", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 m.add predicate: "sameObj", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 
 // observed
-m.add predicate: "adjFrames", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
-m.add predicate: "inFrame", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
+m.add predicate: "inFrame", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 m.add predicate: "inSameFrame", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 m.add predicate: "dims", types: [ArgumentType.UniqueID,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer];
 m.add predicate: "hogAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 m.add predicate: "acdAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 
 // derived
-m.add function: "near", implementation: new NearFunction();
+m.add function: "seqFrames", implementation: new SequentialTest();
 m.add function: "far", implementation: new DistanceFunction();
 
-/* RULES */
+/* ACTION RULES */
 
-// In-frame rules
 for (int a1 : actions) {
 	// HOG-based SVM probabilities
 	m.add rule: hogAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
@@ -131,16 +131,24 @@ for (int a1 : actions) {
 	m.add rule: acdAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
 	// Relational rules
 	for (int a2 : actions) {
-		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is NEAR, then BB2 is doing action a2.
-		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & near(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
-		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is FAR, then BB2 is doing action a2.
+		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is close, then BB2 is doing action a2.
+		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
+		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is far, then BB2 is doing action a2.
 		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
 	}
 	//TODO: Priors on actions?
 }
 
-// Between-frame rules
-m.add rule: (  ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
+/* ID MAINTENANCE: IN-FRAME RULES */
+
+// If BB1,BB2 in same frame, cannot be same object.
+m.add rule: inSameFrame(BB1,BB2) >> ~sameObj(BB1,BB2), weight: 1000, squared: sq;
+
+/* ID MAINTENANCE: BETWEEN-FRAME RULES */
+
+// If BB1 in F1, BB2 in F2, and F1,F2 are sequential, and BB1,BB2 are NEAR, then BB1,BB2 are same object.
+m.add rule: ( inFrame(BB1,F1) & inFrame(BB2,F2) & seqFrames(F1,F2) 
+			& dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
 
 log.info("Model: {}", m)
 
@@ -149,11 +157,37 @@ Map<CompatibilityKernel,Weight> initWeights = new HashMap<CompatibilityKernel, W
 for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 	initWeights.put(k, k.getWeight());
 
-return 0;
-
 /*** LOAD DATA ***/
 
 log.info("Loading data ...");
+
+def inserter;
+Partition part_lab = new Partition(0);
+Partition part_obs = new Partition(1);
+String filePfx = dataPath + "d1_";
+
+/* Ground truth */
+inserter = data.getInserter(doing, part_lab);
+InserterUtils.loadDelimitedData(inserter, filePfx + "action.txt");
+inserter = data.getInserter(sameObj, part_lab);
+InserterUtils.loadDelimitedData(inserter, filePfx + "sameObj.txt");
+
+/* Observations */
+inserter = data.getInserter(inFrame, part_obs);
+InserterUtils.loadDelimitedData(inserter, filePfx + "inframe.txt");
+inserter = data.getInserter(inSameFrame, part_obs);
+InserterUtils.loadDelimitedData(inserter, filePfx + "insameframe.txt");
+inserter = data.getInserter(dims, part_obs);
+InserterUtils.loadDelimitedData(inserter, filePfx + "coords.txt");
+inserter = data.getInserter(hogAction, part_obs);
+InserterUtils.loadDelimitedDataTruth(inserter, filePfx + "hogaction.txt");
+inserter = data.getInserter(acdAction, part_obs);
+InserterUtils.loadDelimitedDataTruth(inserter, filePfx + "acdaction.txt");
+
+return 0;
+
+
+/*** RUN EXPERIMENTS ***/
 
 Map<ConfigBundle,ArrayList<Double>> expResults = new HashMap<String,ArrayList<Double>>();
 for (ConfigBundle config : configs) {
@@ -162,6 +196,8 @@ for (ConfigBundle config : configs) {
 
 for (int fold = 0; fold < folds; fold++) {
 
+	/** SPLIT DATA **/
+	
 	Partition read_tr = new Partition(0 + fold * folds);
 	Partition write_tr = new Partition(1 + fold * folds);
 	Partition read_te = new Partition(2 + fold * folds);
@@ -169,10 +205,7 @@ for (int fold = 0; fold < folds; fold++) {
 	Partition labels_tr = new Partition(4 + fold * folds);
 	Partition labels_te = new Partition(5 + fold * folds);
 
-	/** LOAD FILES **/
 	
-	def inserter;	
-
 	/** POPULATE DB ***/
 
 
