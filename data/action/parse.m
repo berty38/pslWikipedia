@@ -47,7 +47,7 @@ for s=1:length(anno)
 					end
 				end
 				% in-frame predicate
-				fprintf(fid_inframe, '%d\t%d\n', bbid,frid);
+				fprintf(fid_inframe, '%d\t%d\t%d\n', bbid,s,frid);
 				% coordinates predicate
 				fprintf(fid_coords, '%d\t%d\t%d\t%d\t%d\n', bbid, ...
 					anno{s}{f}(b).x, anno{s}{f}(b).y, ...
@@ -119,7 +119,7 @@ for s=1:length(anno)
 					end
 				end
 				% in-frame predicate
-				fprintf(fid_inframe, '%d\t%d\n', bbid,frid);
+				fprintf(fid_inframe, '%d\t%d\t%d\n', bbid,s,frid);
 				% coordinates predicate
 				fprintf(fid_coords, '%d\t%d\t%d\t%d\t%d\n', bbid, ...
 					anno{s}{f}(b).x, anno{s}{f}(b).y, ...

@@ -112,7 +112,7 @@ m.add predicate: "doing", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 m.add predicate: "sameObj", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 
 // observed
-m.add predicate: "inFrame", types: [ArgumentType.UniqueID,ArgumentType.Integer];
+m.add predicate: "inFrame", types: [ArgumentType.UniqueID,ArgumentType.Integer,ArgumentType.Integer];
 m.add predicate: "inSameFrame", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 m.add predicate: "dims", types: [ArgumentType.UniqueID,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer];
 m.add predicate: "hogAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
@@ -147,7 +147,7 @@ m.add rule: inSameFrame(BB1,BB2) >> ~sameObj(BB1,BB2), weight: 1000, squared: sq
 /* ID MAINTENANCE: BETWEEN-FRAME RULES */
 
 // If BB1 in F1, BB2 in F2, and F1,F2 are sequential, and BB1,BB2 are NEAR, then BB1,BB2 are same object.
-m.add rule: ( inFrame(BB1,F1) & inFrame(BB2,F2) & seqFrames(F1,F2) 
+m.add rule: ( inFrame(BB1,S1,F1) & inFrame(BB2,S2,F2) & seqFrames(F1,F2) 
 			& dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
 
 log.info("Model: {}", m)
@@ -204,7 +204,16 @@ for (int fold = 0; fold < folds; fold++) {
 	Partition write_te = new Partition(3 + fold * folds);
 	Partition labels_tr = new Partition(4 + fold * folds);
 	Partition labels_te = new Partition(5 + fold * folds);
-
+	
+	/* To construct training set: query for all of the atoms from each scene, except for hold-out. */
+	for (int s = 0; s < folds; s++) {
+		/* Get all the bounding boxes in the current scene. */
+		
+		/* Get all the atoms corresponding to these bounding boxes. */
+		
+	}
+	/* Testing set: all atoms in hold-out scene. */
+	
 	
 	/** POPULATE DB ***/
 
