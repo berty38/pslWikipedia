@@ -96,9 +96,14 @@ log.info("Initializing model ...");
 
 PSLModel m = new PSLModel(this, data);
 
+/* CONSTANTS */
+
+actions = [1,2,3,4,5];
+actionNames = ["crossing","standing","queueing","walking","talking"];
+
 /* PREDICATES */
 
-// types
+// types (might not need some of these)
 m.add predicate: "sequence", types: [ArgumentType.UniqueID];
 m.add predicate: "frame", types: [ArgumentType.UniqueID];
 m.add predicate: "bbox", types: [ArgumentType.UniqueID];
