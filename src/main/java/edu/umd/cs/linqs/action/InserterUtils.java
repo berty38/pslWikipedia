@@ -16,6 +16,7 @@
  */
 package edu.umd.cs.linqs.action;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -39,12 +40,27 @@ public class InserterUtils {
 	
 	private static final Logger log = LoggerFactory.getLogger(InserterUtils.class);
 
-	public static void loadDelimitedDataMultiPartition(final Inserter insert, String file, String delimiter, int partitionColumn) {
+	public static Inserter[] getMultiPartitionInserters(DataStore data, StandardPredicate pred, Partition[] parts, int numParts) {
+		Inserter[] inserters = new Inserter[numParts];
+		for (int i = 0; i < numParts; i++) {
+			inserters[i] = data.getInserter(pred, parts[i]);
+		}
+		return inserters;
+	}
+	
+	public static void loadDelimitedDataMultiPartition(final Inserter[] inserters, String file, String delimiter) {
+		
 		LoadDelimitedData.loadTabData(file, new DelimitedObjectConstructor<String>(){
-
+			
 			@Override
 			public String create(String[] data) {
-				//assert data.length==length;
+				int seqID;
+				try {
+					seqID = Integer.parseInt(data[0]) / 100000;
+				} catch (NumberFormatException e) {
+					throw new AssertionError("Could not parse sequence ID from bounding box ID: " + data[0]);
+				}
+				Inserter insert = inserters[seqID-1];
 				insert.insert((Object[])data);
 				return null;
 			}
@@ -57,16 +73,22 @@ public class InserterUtils {
 		}, delimiter);
 	}
 	
-	public static void loadDelimitedDataMultiPartition(final Inserter insert, String file, int partitionColumn) {
-		loadDelimitedDataMultiPartition(insert,file,LoadDelimitedData.defaultDelimiter, partitionColumn);
+	public static void loadDelimitedDataMultiPartition(final Inserter[] inserters, String file) {
+		loadDelimitedDataMultiPartition(inserters,file,LoadDelimitedData.defaultDelimiter);
 	}
 	
-	public static void loadDelimitedDataTruthMultiPartition(final Inserter insert, String file, String delimiter, int partitionColumn) {
+	public static void loadDelimitedDataTruthMultiPartition(final Inserter[] inserters, String file, String delimiter) {
 		LoadDelimitedData.loadTabData(file, new DelimitedObjectConstructor<String>(){
 
 			@Override
 			public String create(String[] data) {
+				int seqID;
 				double truth;
+				try {
+					seqID = Integer.parseInt(data[0]) / 100000;
+				} catch (NumberFormatException e) {
+					throw new AssertionError("Could not parse sequence ID from bounding box ID: " + data[0]);
+				}
 				try {
 					truth = Double.parseDouble(data[data.length-1]);
 				} catch (NumberFormatException e) {
@@ -76,6 +98,7 @@ public class InserterUtils {
 					throw new AssertionError("Illegal truth value encountered: " + truth);
 				Object[] newdata = new Object[data.length-1];
 				System.arraycopy(data, 0, newdata, 0, newdata.length);
+				Inserter insert = inserters[seqID-1];
 				insert.insertValue(truth,newdata);
 				return null;
 			}
@@ -88,8 +111,8 @@ public class InserterUtils {
 		}, delimiter);
 	}
 	
-	public static void loadDelimitedDataTruthMultiPartition(final Inserter insert, String file, int partitionColumn) {
-		loadDelimitedDataTruthMultiPartition(insert,file,LoadDelimitedData.defaultDelimiter, partitionColumn);
+	public static void loadDelimitedDataTruthMultiPartition(final Inserter[] inserters, String file) {
+		loadDelimitedDataTruthMultiPartition(inserters,file,LoadDelimitedData.defaultDelimiter);
 	}
 
 }

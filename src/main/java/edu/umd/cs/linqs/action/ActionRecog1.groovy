@@ -16,6 +16,7 @@ import edu.umd.cs.psl.database.Database
 import edu.umd.cs.psl.database.DatabasePopulator
 import edu.umd.cs.psl.database.Partition
 import edu.umd.cs.psl.database.ResultList
+import edu.umd.cs.psl.database.loading.Inserter
 import edu.umd.cs.psl.database.rdbms.RDBMSDataStore
 import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver
 import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver.Type
@@ -38,6 +39,7 @@ import edu.umd.cs.psl.util.database.Queries
 /*** CONFIGURATION PARAMETERS ***/
 
 def dataPath = "./data/action/"
+def filePfx = dataPath + "d1_";
 
 Logger log = LoggerFactory.getLogger(this.class)
 ConfigManager cm = ConfigManager.getManager();
@@ -167,28 +169,32 @@ for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKerne
 
 log.info("Loading data ...");
 
-def inserter;
-Partition part_lab = new Partition(0);
-Partition part_obs = new Partition(1);
-String filePfx = dataPath + "d1_";
+/* Create obs/label partitions for each sequence */
+Partition[][] partitions = new Partition[2][folds];
+for (int fold = 0; fold < folds; fold++) {
+	partitions[0][fold] = data.getNextPartition();	// observations
+	partitions[1][fold] = data.getNextPartition();	// labels
+}
+
+Inserter[] inserters;
 
 /* Ground truth */
-inserter = data.getInserter(doing, part_lab);
-InserterUtils.loadDelimitedData(inserter, filePfx + "action.txt");
-inserter = data.getInserter(sameObj, part_lab);
-InserterUtils.loadDelimitedData(inserter, filePfx + "sameObj.txt");
+inserters = InserterUtils.getMultiPartitionInserters(data, doing, partitions[1], folds);
+InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "action.txt");
+inserters = InserterUtils.getMultiPartitionInserters(data, sameObj, partitions[1], folds);
+InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "sameObj.txt");
 
 /* Observations */
-inserter = data.getInserter(inFrame, part_obs);
-InserterUtils.loadDelimitedData(inserter, filePfx + "inframe.txt");
-inserter = data.getInserter(inSameFrame, part_obs);
-InserterUtils.loadDelimitedData(inserter, filePfx + "insameframe.txt");
-inserter = data.getInserter(dims, part_obs);
-InserterUtils.loadDelimitedData(inserter, filePfx + "coords.txt");
-inserter = data.getInserter(hogAction, part_obs);
-InserterUtils.loadDelimitedDataTruth(inserter, filePfx + "hogaction.txt");
-inserter = data.getInserter(acdAction, part_obs);
-InserterUtils.loadDelimitedDataTruth(inserter, filePfx + "acdaction.txt");
+inserters = InserterUtils.getMultiPartitionInserters(data, inFrame, partitions[0], folds);
+InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "inframe.txt");
+inserters = InserterUtils.getMultiPartitionInserters(data, inSameFrame, partitions[0], folds);
+InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "insameframe.txt");
+inserters = InserterUtils.getMultiPartitionInserters(data, dims, partitions[0], folds);
+InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "coords.txt");
+inserters = InserterUtils.getMultiPartitionInserters(data, hogAction, partitions[0], folds);
+InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogaction.txt");
+inserters = InserterUtils.getMultiPartitionInserters(data, acdAction, partitions[0], folds);
+InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "acdaction.txt");
 
 return 0;
 
@@ -204,12 +210,8 @@ for (int fold = 0; fold < folds; fold++) {
 
 	/** SPLIT DATA **/
 	
-	Partition read_tr = new Partition(0 + fold * folds);
-	Partition write_tr = new Partition(1 + fold * folds);
-	Partition read_te = new Partition(2 + fold * folds);
-	Partition write_te = new Partition(3 + fold * folds);
-	Partition labels_tr = new Partition(4 + fold * folds);
-	Partition labels_te = new Partition(5 + fold * folds);
+	Partition write_tr = data.getNextPartition();
+	Partition write_te = data.getNextPartition();
 	
 	/* To construct training set: query for all of the atoms from each scene, except for hold-out. */
 	for (int s = 0; s < folds; s++) {
