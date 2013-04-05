@@ -135,20 +135,26 @@ for (int a1 : actions) {
 		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
 		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is far, then BB2 is doing action a2.
 		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
+		// If BB1,BB2 in sequential frames, and BB1 is doing action a1, then BB2 is doing action a2.
+		m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
 	}
-	//TODO: Priors on actions?
+	// Priors on actions
+	m.add rule: ~doing(BB1,a1), weight: 1.0, squared: sq;
 }
 
 /* ID MAINTENANCE: IN-FRAME RULES */
 
 // If BB1,BB2 in same frame, cannot be same object.
-m.add rule: inSameFrame(BB1,BB2) >> ~sameObj(BB1,BB2), weight: 1000, squared: sq;
+m.add rule: inSameFrame(BB1,BB2) >> ~sameObj(BB1,BB2), constraint: true;
 
 /* ID MAINTENANCE: BETWEEN-FRAME RULES */
 
 // If BB1 in F1, BB2 in F2, and F1,F2 are sequential, and BB1,BB2 are NEAR, then BB1,BB2 are same object.
 m.add rule: ( inFrame(BB1,S1,F1) & inFrame(BB2,S2,F2) & seqFrames(F1,F2) 
 			& dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
+
+// Prior on sameObj
+m.add rule: ~sameObj(BB1,BB2), weight: 1.0, squared: sq;
 
 log.info("Model: {}", m)
 
