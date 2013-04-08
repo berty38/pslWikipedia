@@ -25,11 +25,13 @@ import edu.umd.cs.psl.evaluation.statistics.ContinuousPredictionComparator
 import edu.umd.cs.psl.groovy.*
 import edu.umd.cs.psl.model.argument.ArgumentType
 import edu.umd.cs.psl.model.argument.GroundTerm
+import edu.umd.cs.psl.model.argument.IntegerAttribute
 import edu.umd.cs.psl.model.argument.UniqueID
 import edu.umd.cs.psl.model.argument.Variable
 import edu.umd.cs.psl.model.atom.GroundAtom
 import edu.umd.cs.psl.model.atom.QueryAtom
 import edu.umd.cs.psl.model.atom.RandomVariableAtom
+import edu.umd.cs.psl.model.formula.Formula;
 import edu.umd.cs.psl.model.kernel.CompatibilityKernel
 import edu.umd.cs.psl.model.parameters.Weight
 import edu.umd.cs.psl.ui.loading.*
@@ -196,8 +198,6 @@ InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogacti
 inserters = InserterUtils.getMultiPartitionInserters(data, acdAction, partitions[0], folds);
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "acdaction.txt");
 
-return 0;
-
 
 /*** RUN EXPERIMENTS ***/
 
@@ -206,25 +206,67 @@ for (ConfigBundle config : configs) {
 	expResults.put(config, new ArrayList<Double>(folds));
 }
 
-for (int fold = 0; fold < folds; fold++) {
+//for (int fold = 0; fold < folds; fold++) {
+for (int fold = 0; fold < 1; fold++) {
 
 	/** SPLIT DATA **/
 	
 	Partition write_tr = data.getNextPartition();
 	Partition write_te = data.getNextPartition();
 	
+	def toClose = [inFrame, inSameFrame, dims, hogAction, acdAction] as Set;
+	
 	/* To construct training set: query for all of the atoms from each scene, except for hold-out. */
+	ArrayList<Partition> trainPartsObs = new ArrayList<Partition>();
+	ArrayList<Partition> trainPartsLab = new ArrayList<Partition>();
 	for (int s = 0; s < folds; s++) {
-		/* Get all the bounding boxes in the current scene. */
-		
-		/* Get all the atoms corresponding to these bounding boxes. */
-		
-	}
-	/* Testing set: all atoms in hold-out scene. */
+		if (s == fold)
+			continue;
+		trainPartsObs.add(partitions[0][s]);
+		trainPartsObs.add(partitions[1][s]);
+	}	
 	
-	
-	/** POPULATE DB ***/
+	/** POPULATE TRAIN DB ***/
 
+	/* Populate doing predicate. */
+	Database trainDB = data.getDatabase(write_tr, toClose, (Partition[])trainPartsObs.toArray());
+	Variable BBox = new Variable("BBox");
+	Variable Action = new Variable("Action");
+	Set<GroundAtom> atoms = Queries.getAllAtoms(trainDB, dims);
+	Set<GroundTerm> bboxTerms = new HashSet<GroundTerm>();
+	Set<GroundTerm> actionTerms = new HashSet<GroundTerm>();
+	Map<Variable, Set<GroundTerm>> subs = new HashMap<Variable, Set<GroundTerm>>();
+	subs.put(BBox, bboxTerms);
+	subs.put(Action, actionTerms);
+	for (GroundAtom a : atoms) {
+		bboxTerms.add(a.getArguments()[0]);
+	}
+	for (int a : actions) {
+		actionTerms.add(new IntegerAttribute(a));
+	}
+	dbPop = new DatabasePopulator(trainDB);
+	dbPop.populate(new QueryAtom(doing, BBox, Action), subs);
+	
+	/* Populate sameObj predicate.*/
+	ArrayList<ArrayList<GroundTerm>>[] boxTerms = new ArrayList<ArrayList<GroundTerm>>[folds];
+	atoms = Queries.getAllAtoms(trainDB, inFrame);
+	for (GroundAtom a : atoms) {
+		GroundTerm[] terms = a.getArguments();
+		int s = ((IntegerAttribute)terms[1]).getValue().intValue() - 1;
+		int f = ((IntegerAttribute)terms[2]).getValue().intValue() - 1;
+		if (boxTerms[s] == null)
+			boxTerms[s] = new ArrayList<ArrayList<GroundTerm>>();
+		if (boxTerms[s].get(f) == null)
+			boxTerms[s].set(f) = new ArrayList<GroundTerm>();
+		boxTerms[s].get(f).add(a);
+	}
+	
+	
+	/* Labels DB */
+	Partition label_wr = data.getNextPartition();
+	Database labelDB = data.getDatabase(label_wr, [doing,sameObj] as Set, (Partition[])trainPartsLab.toArray());
+	
+	return 0;
 
 	/*** EXPERIMENT ***/
 	
