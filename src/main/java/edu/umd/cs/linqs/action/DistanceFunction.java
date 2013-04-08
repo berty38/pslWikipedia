@@ -31,9 +31,12 @@ class DistanceFunction implements ExternalFunction {
 		int h1 = ((IntegerAttribute) args[6]).getValue().intValue();
 		int h2 = ((IntegerAttribute) args[7]).getValue().intValue();
 
-		//TODO: compute distance between bounding boxes
+		//TODO: modify distance function to something more sophisticated
+		double dx = Math.abs(x1-x2);
+		double dy = Math.abs(y1-y2);
+		double d = Math.exp(-(dx*dx + dy*dy));
 		
-		return 0;
+		return d;
 	}
 
 	@Override

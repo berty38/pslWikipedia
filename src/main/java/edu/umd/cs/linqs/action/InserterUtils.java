@@ -38,6 +38,8 @@ import edu.umd.cs.psl.ui.data.file.util.LoadDelimitedData;
  */
 public class InserterUtils {
 	
+	public static final int DEFAULT_SEQ_MULT = 100000;
+	
 	private static final Logger log = LoggerFactory.getLogger(InserterUtils.class);
 
 	public static Inserter[] getMultiPartitionInserters(DataStore data, StandardPredicate pred, Partition[] parts, int numParts) {
@@ -48,7 +50,7 @@ public class InserterUtils {
 		return inserters;
 	}
 	
-	public static void loadDelimitedDataMultiPartition(final Inserter[] inserters, String file, String delimiter) {
+	public static void loadDelimitedDataMultiPartition(final Inserter[] inserters, String file, String delimiter, final int seqMult) {
 		
 		LoadDelimitedData.loadTabData(file, new DelimitedObjectConstructor<String>(){
 			
@@ -56,7 +58,7 @@ public class InserterUtils {
 			public String create(String[] data) {
 				int seqID;
 				try {
-					seqID = Integer.parseInt(data[0]) / 100000;
+					seqID = Integer.parseInt(data[0]) / seqMult;
 				} catch (NumberFormatException e) {
 					throw new AssertionError("Could not parse sequence ID from bounding box ID: " + data[0]);
 				}
@@ -74,10 +76,10 @@ public class InserterUtils {
 	}
 	
 	public static void loadDelimitedDataMultiPartition(final Inserter[] inserters, String file) {
-		loadDelimitedDataMultiPartition(inserters,file,LoadDelimitedData.defaultDelimiter);
+		loadDelimitedDataMultiPartition(inserters, file, LoadDelimitedData.defaultDelimiter, DEFAULT_SEQ_MULT);
 	}
 	
-	public static void loadDelimitedDataTruthMultiPartition(final Inserter[] inserters, String file, String delimiter) {
+	public static void loadDelimitedDataTruthMultiPartition(final Inserter[] inserters, String file, String delimiter, final int seqMult) {
 		LoadDelimitedData.loadTabData(file, new DelimitedObjectConstructor<String>(){
 
 			@Override
@@ -85,7 +87,7 @@ public class InserterUtils {
 				int seqID;
 				double truth;
 				try {
-					seqID = Integer.parseInt(data[0]) / 100000;
+					seqID = Integer.parseInt(data[0]) / seqMult;
 				} catch (NumberFormatException e) {
 					throw new AssertionError("Could not parse sequence ID from bounding box ID: " + data[0]);
 				}
@@ -112,7 +114,7 @@ public class InserterUtils {
 	}
 	
 	public static void loadDelimitedDataTruthMultiPartition(final Inserter[] inserters, String file) {
-		loadDelimitedDataTruthMultiPartition(inserters,file,LoadDelimitedData.defaultDelimiter);
+		loadDelimitedDataTruthMultiPartition(inserters, file, LoadDelimitedData.defaultDelimiter, DEFAULT_SEQ_MULT);
 	}
 
 }

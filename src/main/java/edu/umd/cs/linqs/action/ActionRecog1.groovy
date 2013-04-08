@@ -15,23 +15,22 @@ import edu.umd.cs.psl.database.DataStore
 import edu.umd.cs.psl.database.Database
 import edu.umd.cs.psl.database.DatabasePopulator
 import edu.umd.cs.psl.database.Partition
-import edu.umd.cs.psl.database.ResultList
 import edu.umd.cs.psl.database.loading.Inserter
 import edu.umd.cs.psl.database.rdbms.RDBMSDataStore
 import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver
 import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver.Type
 import edu.umd.cs.psl.evaluation.result.FullInferenceResult
-import edu.umd.cs.psl.evaluation.statistics.ContinuousPredictionComparator
+import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionComparator
+import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionStatistics
+import edu.umd.cs.psl.evaluation.statistics.filter.MaxValueFilter
 import edu.umd.cs.psl.groovy.*
 import edu.umd.cs.psl.model.argument.ArgumentType
 import edu.umd.cs.psl.model.argument.GroundTerm
 import edu.umd.cs.psl.model.argument.IntegerAttribute
-import edu.umd.cs.psl.model.argument.UniqueID
 import edu.umd.cs.psl.model.argument.Variable
 import edu.umd.cs.psl.model.atom.GroundAtom
 import edu.umd.cs.psl.model.atom.QueryAtom
 import edu.umd.cs.psl.model.atom.RandomVariableAtom
-import edu.umd.cs.psl.model.formula.Formula;
 import edu.umd.cs.psl.model.kernel.CompatibilityKernel
 import edu.umd.cs.psl.model.parameters.Weight
 import edu.umd.cs.psl.ui.loading.*
@@ -121,9 +120,10 @@ m.add predicate: "inSameFrame", types: [ArgumentType.UniqueID,ArgumentType.Uniqu
 m.add predicate: "dims", types: [ArgumentType.UniqueID,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer];
 m.add predicate: "hogAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 m.add predicate: "acdAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
+m.add predicate: "seqFrames", types: [ArgumentType.Integer,ArgumentType.Integer];
 
 // derived
-m.add function: "seqFrames", implementation: new SequentialTest();
+//m.add function: "seqFrames", implementation: new SequentialTest();
 m.add function: "far", implementation: new DistanceFunction();
 
 /* ACTION RULES */
@@ -145,6 +145,8 @@ for (int a1 : actions) {
 	// Priors on actions
 	m.add rule: ~doing(BB1,a1), weight: 1.0, squared: sq;
 }
+// Functional constraint on doing means that it should sum to 1 for each BB
+m.add PredicateConstraint.Functional, on: doing;
 
 /* ID MAINTENANCE: IN-FRAME RULES */
 
@@ -172,10 +174,11 @@ for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKerne
 log.info("Loading data ...");
 
 /* Create obs/label partitions for each sequence */
+int partCnt = 0;
 Partition[][] partitions = new Partition[2][folds];
 for (int fold = 0; fold < folds; fold++) {
-	partitions[0][fold] = data.getNextPartition();	// observations
-	partitions[1][fold] = data.getNextPartition();	// labels
+	partitions[0][fold] = new Partition(partCnt++);	// observations
+	partitions[1][fold] = new Partition(partCnt++);	// labels
 }
 
 Inserter[] inserters;
@@ -197,76 +200,139 @@ inserters = InserterUtils.getMultiPartitionInserters(data, hogAction, partitions
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogaction.txt");
 inserters = InserterUtils.getMultiPartitionInserters(data, acdAction, partitions[0], folds);
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "acdaction.txt");
+inserters = InserterUtils.getMultiPartitionInserters(data, seqFrames, partitions[0], folds);
+InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "seqframes.txt", "\t", 1000);
+
+
+/** GLOBAL DATA FOR DB POPULATION **/
+
+List<HashMap<Integer,List<GroundTerm>>> seqs = new ArrayList<HashMap<Integer,List<GroundTerm>>>();
+for (int s = 0; s < folds; s++) {
+	seqs.add(new HashMap<Integer,List<GroundTerm>>());
+}
+def toClose = [inFrame, inSameFrame, dims, hogAction, acdAction, seqFrames] as Set;
+Database db = data.getDatabase(new Partition(partCnt++), toClose, partitions[0]);
+Set<GroundAtom> atoms = Queries.getAllAtoms(db, inFrame);
+for (GroundAtom a : atoms) {
+	// Get terms
+	GroundTerm[] terms = a.getArguments();
+	GroundTerm bbox = terms[0];
+	int s = ((IntegerAttribute)terms[1]).getValue().intValue() - 1;
+	int f = ((IntegerAttribute)terms[2]).getValue().intValue();
+	Map<Integer,List<GroundTerm>> frames = seqs[s];
+	List<GroundTerm> bboxes;
+	if (frames.get(f) != null)
+		bboxes = frames.get(f);
+	else {
+		bboxes = new ArrayList<GroundTerm>();
+		frames.put(f, bboxes);
+	}
+	bboxes.add(bbox);
+}
+db.close();
+Set<GroundTerm> actionTerms = new HashSet<GroundTerm>();
+for (int a : actions) {
+	actionTerms.add(new IntegerAttribute(a));
+}
 
 
 /*** RUN EXPERIMENTS ***/
 
-Map<ConfigBundle,ArrayList<Double>> expResults = new HashMap<String,ArrayList<Double>>();
-for (ConfigBundle config : configs) {
-	expResults.put(config, new ArrayList<Double>(folds));
-}
+log.info("Starting experiments.");
 
+Map<String, List<DiscretePredictionStatistics>> stats_doing = new HashMap<String, List<DiscretePredictionStatistics>>()
+for (ConfigBundle method : configs)
+	stats_doing.put(method, new ArrayList<DiscretePredictionStatistics>())
+Map<String, List<DiscretePredictionStatistics>> stats_sameObj = new HashMap<String, List<DiscretePredictionStatistics>>()
+for (ConfigBundle method : configs)
+	stats_sameObj.put(method, new ArrayList<DiscretePredictionStatistics>())
+	
 //for (int fold = 0; fold < folds; fold++) {
 for (int fold = 0; fold < 1; fold++) {
 
 	/** SPLIT DATA **/
 	
-	Partition write_tr = data.getNextPartition();
-	Partition write_te = data.getNextPartition();
-	
-	def toClose = [inFrame, inSameFrame, dims, hogAction, acdAction] as Set;
+	log.info("Splitting data ...");
 	
 	/* To construct training set: query for all of the atoms from each scene, except for hold-out. */
-	ArrayList<Partition> trainPartsObs = new ArrayList<Partition>();
-	ArrayList<Partition> trainPartsLab = new ArrayList<Partition>();
+	List<Partition> trainPartsObs = new ArrayList<Partition>();
+	List<Partition> trainPartsLab = new ArrayList<Partition>();
 	for (int s = 0; s < folds; s++) {
 		if (s == fold)
 			continue;
 		trainPartsObs.add(partitions[0][s]);
-		trainPartsObs.add(partitions[1][s]);
-	}	
+		trainPartsLab.add(partitions[1][s]);
+	}
+	testPartObs = partitions[0][fold];
+	testPartLab = partitions[1][fold];
 	
-	/** POPULATE TRAIN DB ***/
+	/** POPULATE DB ***/
+
+	log.info("Populating databases ...");
+		
+	Partition write_tr = new Partition(partCnt++);
+	Partition write_te = new Partition(partCnt++);
+	Database trainDB = data.getDatabase(write_tr, toClose, (Partition[])trainPartsObs.toArray());
+	Database testDB = data.getDatabase(write_te, toClose, testPartObs);
 
 	/* Populate doing predicate. */
-	Database trainDB = data.getDatabase(write_tr, toClose, (Partition[])trainPartsObs.toArray());
+	
 	Variable BBox = new Variable("BBox");
 	Variable Action = new Variable("Action");
-	Set<GroundAtom> atoms = Queries.getAllAtoms(trainDB, dims);
-	Set<GroundTerm> bboxTerms = new HashSet<GroundTerm>();
-	Set<GroundTerm> actionTerms = new HashSet<GroundTerm>();
 	Map<Variable, Set<GroundTerm>> subs = new HashMap<Variable, Set<GroundTerm>>();
-	subs.put(BBox, bboxTerms);
 	subs.put(Action, actionTerms);
-	for (GroundAtom a : atoms) {
-		bboxTerms.add(a.getArguments()[0]);
+	// Get all bbox ground terms
+	Set<GroundTerm> bboxTerms_tr = new HashSet<GroundTerm>();
+	Set<GroundTerm> bboxTerms_te = new HashSet<GroundTerm>();
+	for (int s = 0; s < folds; s++) {
+		Set<GroundTerm> curSet = (s != fold) ? bboxTerms_tr : bboxTerms_te;
+		Map<Integer,ArrayList<GroundTerm>> frames = seqs[s];
+		for (ArrayList<GroundTerm> f : frames.values()) {
+			curSet.addAll(f);
+		}
 	}
-	for (int a : actions) {
-		actionTerms.add(new IntegerAttribute(a));
-	}
-	dbPop = new DatabasePopulator(trainDB);
+	// Training
+	subs.put(BBox, bboxTerms_tr);
+	DatabasePopulator dbPop = new DatabasePopulator(trainDB);
 	dbPop.populate(new QueryAtom(doing, BBox, Action), subs);
+	// Testing
+	subs.put(BBox, bboxTerms_te);
+	dbPop = new DatabasePopulator(testDB);
+	dbPop.populate(new QueryAtom(doing, BBox, Action), subs);
+	int numTestEx_doing = bboxTerms_te.size() * actions.size();
 	
 	/* Populate sameObj predicate.*/
-	ArrayList<ArrayList<GroundTerm>>[] boxTerms = new ArrayList<ArrayList<GroundTerm>>[folds];
-	atoms = Queries.getAllAtoms(trainDB, inFrame);
-	for (GroundAtom a : atoms) {
-		GroundTerm[] terms = a.getArguments();
-		int s = ((IntegerAttribute)terms[1]).getValue().intValue() - 1;
-		int f = ((IntegerAttribute)terms[2]).getValue().intValue() - 1;
-		if (boxTerms[s] == null)
-			boxTerms[s] = new ArrayList<ArrayList<GroundTerm>>();
-		if (boxTerms[s].get(f) == null)
-			boxTerms[s].set(f) = new ArrayList<GroundTerm>();
-		boxTerms[s].get(f).add(a);
+	int numTestEx_sameObj = 0;
+	for (int s = 0; s < folds; s++) {
+		HashMap<Integer,List<GroundTerm>> frames = seqs[s-1];
+		List<Integer> frameID = frames.keySet().asList();
+		Collections.sort(frameID);
+		List<GroundTerm> bboxes1, bboxes2;
+		for (int i = 0; i < frameID.size()-1; i++) {
+			bboxes1 = frames.get(frameID[i]);
+			bboxes2 = frames.get(frameID[i+1]);
+			for (GroundTerm bb1 : bboxes1) {
+				for (GroundTerm bb2 : bboxes2) {
+					if (s != fold) {
+						RandomVariableAtom rv = trainDB.getAtom(sameObj, bb1, bb2);
+						trainDB.commit(rv);
+					}
+					else {
+						RandomVariableAtom rv = testDB.getAtom(sameObj, bb1, bb2);
+						testDB.commit(rv);
+						++numTestEx_sameObj;
+					}
+				}
+			}
+		}
 	}
 	
+
+	/* Need to close testDB so that we can use write_te for multiple databases. */	
+	testDB.close();
 	
-	/* Labels DB */
-	Partition label_wr = data.getNextPartition();
-	Database labelDB = data.getDatabase(label_wr, [doing,sameObj] as Set, (Partition[])trainPartsLab.toArray());
-	
-	return 0;
+	/* Label DBs */
+	Database labelDB = data.getDatabase(new Partition(partCnt++), [doing,sameObj] as Set, (Partition[])trainPartsLab.toArray());
 
 	/*** EXPERIMENT ***/
 	
@@ -278,45 +344,60 @@ for (int fold = 0; fold < 1; fold++) {
 		def method = config.getString("learningmethod", "");
 
 		/* Weight learning */
-		WeightLearner.learn(method, m, trainDB, labelsDB, initWeights, config, log)
+		WeightLearner.learn(method, m, trainDB, labelDB, initWeights, config, log)
 
 		log.info("Learned model {}: \n {}", configName, m.toString())
 
 		/* Inference on test set */
-		Database predDB = data.getDatabase(write_te, toClose, read_te);
-//		Set<GroundAtom> allAtoms = Queries.getAllAtoms(predDB, rating)
-//		for (RandomVariableAtom atom : Iterables.filter(allAtoms, RandomVariableAtom))
-//			atom.setValue(0.0)
-		MPEInference mpe = new MPEInference(m, predDB, config)
+		testDB = data.getDatabase(write_te, toClose, testPartObs);
+		Set<GroundAtom> targetAtoms = Queries.getAllAtoms(testDB, doing)
+		for (RandomVariableAtom rv : Iterables.filter(targetAtoms, RandomVariableAtom))
+			rv.setValue(0.0)
+		targetAtoms = Queries.getAllAtoms(testDB, sameObj);
+		for (RandomVariableAtom rv : Iterables.filter(targetAtoms, RandomVariableAtom))
+			rv.setValue(0.0)
+		MPEInference mpe = new MPEInference(m, testDB, config)
 		FullInferenceResult result = mpe.mpeInference()
 		log.info("Objective: {}", result.getTotalWeightedIncompatibility())
-		predDB.close();
+		testDB.close();
 	
-		/* Evaluation */
-		predDB = data.getDatabase(write_te);
-//		Database groundTruthDB = data.getDatabase(labels_te, [rating] as Set)
-//		def comparator = new ContinuousPredictionComparator(predDB)
-//		comparator.setBaseline(groundTruthDB)
-//		def metrics = [ContinuousPredictionComparator.Metric.MSE, ContinuousPredictionComparator.Metric.MAE]
-//		double [] score = new double[metrics.size()]
-//		for (int i = 0; i < metrics.size(); i++) {
-//			comparator.setMetric(metrics.get(i))
-//			score[i] = comparator.compare(rating)
-//		}
-		log.warn("Fold {} : {} : MSE {} : MAE {}", fold, configName, score[0], score[1]);
-		expResults.get(config).add(fold, score);
+		/* Evaluate doing predicate */
+		Database predDB = data.getDatabase(write_te, [doing] as Set);
+		Database truthDB = data.getDatabase(testPartLab, [doing] as Set);
+		def comparator = new DiscretePredictionComparator(predDB);
+		comparator.setBaseline(truthDB);
+		comparator.setResultFilter(new MaxValueFilter(doing, 1));
+		comparator.setThreshold(Double.MIN_VALUE) // treat best value as true as long as it is nonzero
+		DiscretePredictionStatistics stats = comparator.compare(doing, numTestEx_doing);
+		System.out.println("F1 Action:  " + stats.getF1(DiscretePredictionStatistics.BinaryClass.POSITIVE));
+		stats_doing.get(config).add(fold, stats)
 		predDB.close();
-		groundTruthDB.close()
+		truthDB.close();
+	
+		/* Evaluate doing predicate */
+		predDB = data.getDatabase(write_te, [doing] as Set);
+		truthDB = data.getDatabase(testPartLab, [doing] as Set);
+		comparator = new DiscretePredictionComparator(predDB);
+		comparator.setBaseline(truthDB);
+		comparator.setThreshold(0.5);
+		stats = comparator.compare(doing, numTestEx_sameObj);
+		System.out.println("F1 SameObj:  " + stats.getF1(DiscretePredictionStatistics.BinaryClass.POSITIVE));
+		stats_sameObj.get(config).add(fold, stats)
+		predDB.close();
+		truthDB.close();
 	}
-	trainDB.close()
+	
+	/* Close all databases. */
+	trainDB.close();
+	labelDB.close();
 }
 
-log.warn("\n\nRESULTS\n");
-for (ConfigBundle config : configs) {
-	def configName = config.getString("name", "")
-	def scores = expResults.get(config);
-	for (int fold = 0; fold < folds; fold++) {
-		def score = scores.get(fold)
-		log.warn("{} \t{}\t{}\t{}", configName, fold, score[0], score[1]);
-	}
-}
+//log.warn("\n\nRESULTS\n");
+//for (ConfigBundle config : configs) {
+//	def configName = config.getString("name", "")
+//	def scores = stats_doing.get(config);
+//	for (int fold = 0; fold < folds; fold++) {
+//		def score = scores.get(fold)
+//		log.warn("{} \t{}\t{}\t{}", configName, fold, score[0], score[1]);
+//	}
+//}
