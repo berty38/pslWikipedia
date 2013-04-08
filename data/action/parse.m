@@ -31,9 +31,9 @@ for s=1:length(anno)
 			error('Too many boxes in seq %d, frame %d: %d boxes', s, f, length(anno{s}{f}))
 		end
 		% sequential frames predicate (because PSL is stupid)
-		if f > 1
-			fprintf(fid_seqframes, '%d\t%d\n', frid-1, frid);
-		end
+% 		if f > 1
+% 			fprintf(fid_seqframes, '%d\t%d\n', frid-1, frid);
+% 		end
 		for b=1:length(anno{s}{f})
 			% bounding box ID
 			bbid = frid*maxBoxes + b;
@@ -46,8 +46,9 @@ for s=1:length(anno)
 				if f > 1
 					for b_=1:length(anno{s}{f-1})
 						bbid_ = (frid-1)*maxBoxes + b_;
+						fprintf(fid_seqframes, '%d\t%d\n', bbid_, bbid);
 						if anno{s}{f-1}(b_).id == anno{s}{f}(b).id
-							fprintf(fid_sameobj, '%d\t%d\t\n', bbid_, bbid);
+							fprintf(fid_sameobj, '%d\t%d\n', bbid_, bbid);
 						end
 					end
 				end
@@ -108,9 +109,9 @@ for s=1:length(anno)
 			error('Too many boxes in seq %d, frame %d: %d boxes', s, f, length(anno{s}{f}))
 		end
 		% sequential frames predicate (because PSL is stupid)
-		if f > 1
-			fprintf(fid_seqframes, '%d\t%d\n', frid-1, frid);
-		end
+% 		if f > 1
+% 			fprintf(fid_seqframes, '%d\t%d\n', frid-1, frid);
+% 		end
 		for b=1:length(anno{s}{f})
 			% bounding box ID
 			bbid = frid*maxBoxes + b;
@@ -123,8 +124,9 @@ for s=1:length(anno)
 				if f > 1
 					for b_=1:length(anno{s}{f-1})
 						bbid_ = (frid-1)*maxBoxes + b_;
+						fprintf(fid_seqframes, '%d\t%d\n', bbid_, bbid);
 						if anno{s}{f-1}(b_).id == anno{s}{f}(b).id
-							fprintf(fid_sameobj, '%d\t%d\t\n', bbid_, bbid);
+							fprintf(fid_sameobj, '%d\t%d\n', bbid_, bbid);
 						end
 					end
 				end

@@ -117,10 +117,11 @@ m.add predicate: "sameObj", types: [ArgumentType.UniqueID,ArgumentType.UniqueID]
 // observed
 m.add predicate: "inFrame", types: [ArgumentType.UniqueID,ArgumentType.Integer,ArgumentType.Integer];
 m.add predicate: "inSameFrame", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
+m.add predicate: "inSeqFrames", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 m.add predicate: "dims", types: [ArgumentType.UniqueID,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer];
 m.add predicate: "hogAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 m.add predicate: "acdAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
-m.add predicate: "seqFrames", types: [ArgumentType.Integer,ArgumentType.Integer];
+//m.add predicate: "seqFrames", types: [ArgumentType.Integer,ArgumentType.Integer];
 
 // derived
 //m.add function: "seqFrames", implementation: new SequentialTest();
@@ -156,8 +157,9 @@ m.add rule: inSameFrame(BB1,BB2) >> ~sameObj(BB1,BB2), constraint: true;
 /* ID MAINTENANCE: BETWEEN-FRAME RULES */
 
 // If BB1 in F1, BB2 in F2, and F1,F2 are sequential, and BB1,BB2 are NEAR, then BB1,BB2 are same object.
-m.add rule: ( inFrame(BB1,S1,F1) & inFrame(BB2,S2,F2) & seqFrames(F1,F2) 
-			& dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
+m.add rule: ( inSeqFrames(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
+//m.add rule: ( inFrame(BB1,S1,F1) & inFrame(BB2,S2,F2) & seqFrames(F1,F2) 
+//			& dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
 
 // Prior on sameObj
 m.add rule: ~sameObj(BB1,BB2), weight: 1.0, squared: sq;
@@ -200,8 +202,10 @@ inserters = InserterUtils.getMultiPartitionInserters(data, hogAction, partitions
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogaction.txt");
 inserters = InserterUtils.getMultiPartitionInserters(data, acdAction, partitions[0], folds);
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "acdaction.txt");
-inserters = InserterUtils.getMultiPartitionInserters(data, seqFrames, partitions[0], folds);
-InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "seqframes.txt", "\t", 1000);
+inserters = InserterUtils.getMultiPartitionInserters(data, inSeqFrames, partitions[0], folds);
+InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "seqframes.txt");
+//inserters = InserterUtils.getMultiPartitionInserters(data, seqFrames, partitions[0], folds);
+//InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "seqframes.txt", "\t", 1000);
 
 
 /** GLOBAL DATA FOR DB POPULATION **/
@@ -210,7 +214,7 @@ List<HashMap<Integer,List<GroundTerm>>> seqs = new ArrayList<HashMap<Integer,Lis
 for (int s = 0; s < folds; s++) {
 	seqs.add(new HashMap<Integer,List<GroundTerm>>());
 }
-def toClose = [inFrame, inSameFrame, dims, hogAction, acdAction, seqFrames] as Set;
+def toClose = [inFrame, inSameFrame, dims, hogAction, acdAction, inSeqFrames] as Set;
 Database db = data.getDatabase(new Partition(partCnt++), toClose, partitions[0]);
 Set<GroundAtom> atoms = Queries.getAllAtoms(db, inFrame);
 for (GroundAtom a : atoms) {
@@ -276,7 +280,6 @@ for (int fold = 0; fold < 1; fold++) {
 	Database testDB = data.getDatabase(write_te, toClose, testPartObs);
 
 	/* Populate doing predicate. */
-	
 	Variable BBox = new Variable("BBox");
 	Variable Action = new Variable("Action");
 	Map<Variable, Set<GroundTerm>> subs = new HashMap<Variable, Set<GroundTerm>>();
