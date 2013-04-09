@@ -27,6 +27,7 @@ import edu.umd.cs.psl.groovy.*
 import edu.umd.cs.psl.model.argument.ArgumentType
 import edu.umd.cs.psl.model.argument.GroundTerm
 import edu.umd.cs.psl.model.argument.IntegerAttribute
+import edu.umd.cs.psl.model.argument.UniqueID
 import edu.umd.cs.psl.model.argument.Variable
 import edu.umd.cs.psl.model.atom.GroundAtom
 import edu.umd.cs.psl.model.atom.QueryAtom
@@ -121,30 +122,31 @@ m.add predicate: "inSeqFrames", types: [ArgumentType.UniqueID,ArgumentType.Uniqu
 m.add predicate: "dims", types: [ArgumentType.UniqueID,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer];
 m.add predicate: "hogAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 m.add predicate: "acdAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
-//m.add predicate: "seqFrames", types: [ArgumentType.Integer,ArgumentType.Integer];
 
 // derived
-//m.add function: "seqFrames", implementation: new SequentialTest();
-m.add function: "far", implementation: new DistanceFunction();
+m.add function: "close", implementation: new ClosenessFunction(1e5, 1e-1);
 
 /* ACTION RULES */
 
 for (int a1 : actions) {
-	// HOG-based SVM probabilities
-	m.add rule: hogAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
-	// ACD-based SVM probabilities
-	m.add rule: acdAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
-	// Relational rules
-	for (int a2 : actions) {
-		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is close, then BB2 is doing action a2.
-		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
-		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is far, then BB2 is doing action a2.
-		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
-		// If BB1,BB2 in sequential frames, and BB1 is doing action a1, then BB2 is doing action a2.
-		m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
-	}
 	// Priors on actions
 	m.add rule: ~doing(BB1,a1), weight: 1.0, squared: sq;
+
+	// HOG-based SVM probabilities
+	m.add rule: hogAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
+	
+	// ACD-based SVM probabilities
+//	m.add rule: acdAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
+
+	// Relational rules (same action)
+	for (int a2 : actions) {
+		// If BB1,BB2 in sequential frames, and BB1 is doing action a1, then BB2 is doing action a2.
+//		m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
+		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is close, then BB2 is doing action a2.
+		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
+		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is far, then BB2 is doing action a2.
+//		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
+	}
 }
 // Functional constraint on doing means that it should sum to 1 for each BB
 m.add PredicateConstraint.Functional, on: doing;
@@ -152,14 +154,12 @@ m.add PredicateConstraint.Functional, on: doing;
 /* ID MAINTENANCE: IN-FRAME RULES */
 
 // If BB1,BB2 in same frame, cannot be same object.
-m.add rule: inSameFrame(BB1,BB2) >> ~sameObj(BB1,BB2), constraint: true;
+//m.add rule: inSameFrame(BB1,BB2) >> ~sameObj(BB1,BB2), constraint: true;
 
 /* ID MAINTENANCE: BETWEEN-FRAME RULES */
 
-// If BB1 in F1, BB2 in F2, and F1,F2 are sequential, and BB1,BB2 are NEAR, then BB1,BB2 are same object.
-m.add rule: ( inSeqFrames(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
-//m.add rule: ( inFrame(BB1,S1,F1) & inFrame(BB2,S2,F2) & seqFrames(F1,F2) 
-//			& dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~far(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
+// If BB1 in F1, BB2 in F2, and F1,F2 are sequential, and BB1,BB2 are close, then BB1,BB2 are same object.
+m.add rule: ( inSeqFrames(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
 
 // Prior on sameObj
 m.add rule: ~sameObj(BB1,BB2), weight: 1.0, squared: sq;
@@ -196,42 +196,37 @@ inserters = InserterUtils.getMultiPartitionInserters(data, inFrame, partitions[0
 InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "inframe.txt");
 inserters = InserterUtils.getMultiPartitionInserters(data, inSameFrame, partitions[0], folds);
 InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "insameframe.txt");
+inserters = InserterUtils.getMultiPartitionInserters(data, inSeqFrames, partitions[0], folds);
+InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "inseqframes.txt");
 inserters = InserterUtils.getMultiPartitionInserters(data, dims, partitions[0], folds);
 InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "coords.txt");
 inserters = InserterUtils.getMultiPartitionInserters(data, hogAction, partitions[0], folds);
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogaction.txt");
 inserters = InserterUtils.getMultiPartitionInserters(data, acdAction, partitions[0], folds);
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "acdaction.txt");
-inserters = InserterUtils.getMultiPartitionInserters(data, inSeqFrames, partitions[0], folds);
-InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "seqframes.txt");
-//inserters = InserterUtils.getMultiPartitionInserters(data, seqFrames, partitions[0], folds);
-//InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "seqframes.txt", "\t", 1000);
 
 
 /** GLOBAL DATA FOR DB POPULATION **/
 
-List<HashMap<Integer,List<GroundTerm>>> seqs = new ArrayList<HashMap<Integer,List<GroundTerm>>>();
+List<List<GroundTerm>> bboxesInSeq = new ArrayList<List<GroundTerm>>();
+List<List<GroundTerm[]>> potentialMatchesInSeq = new ArrayList<List<GroundTerm[]>>();
 for (int s = 0; s < folds; s++) {
-	seqs.add(new HashMap<Integer,List<GroundTerm>>());
+	bboxesInSeq.add(new ArrayList<GroundTerm>());
+	potentialMatchesInSeq.add(new ArrayList<GroundTerm[]>());
 }
 def toClose = [inFrame, inSameFrame, dims, hogAction, acdAction, inSeqFrames] as Set;
 Database db = data.getDatabase(new Partition(partCnt++), toClose, partitions[0]);
 Set<GroundAtom> atoms = Queries.getAllAtoms(db, inFrame);
 for (GroundAtom a : atoms) {
-	// Get terms
 	GroundTerm[] terms = a.getArguments();
-	GroundTerm bbox = terms[0];
 	int s = ((IntegerAttribute)terms[1]).getValue().intValue() - 1;
-	int f = ((IntegerAttribute)terms[2]).getValue().intValue();
-	Map<Integer,List<GroundTerm>> frames = seqs[s];
-	List<GroundTerm> bboxes;
-	if (frames.get(f) != null)
-		bboxes = frames.get(f);
-	else {
-		bboxes = new ArrayList<GroundTerm>();
-		frames.put(f, bboxes);
-	}
-	bboxes.add(bbox);
+	bboxesInSeq[s].add(terms[0]);
+}
+atoms = Queries.getAllAtoms(db, inSeqFrames);
+for (GroundAtom a : atoms) {
+	GroundTerm[] terms = a.getArguments();
+	int s = Integer.parseInt(terms[0].toString()) / 100000 - 1;
+	potentialMatchesInSeq[s].add(terms);
 }
 db.close();
 Set<GroundTerm> actionTerms = new HashSet<GroundTerm>();
@@ -289,10 +284,7 @@ for (int fold = 0; fold < 1; fold++) {
 	Set<GroundTerm> bboxTerms_te = new HashSet<GroundTerm>();
 	for (int s = 0; s < folds; s++) {
 		Set<GroundTerm> curSet = (s != fold) ? bboxTerms_tr : bboxTerms_te;
-		Map<Integer,ArrayList<GroundTerm>> frames = seqs[s];
-		for (ArrayList<GroundTerm> f : frames.values()) {
-			curSet.addAll(f);
-		}
+		curSet.addAll(bboxesInSeq[s]);
 	}
 	// Training
 	subs.put(BBox, bboxTerms_tr);
@@ -307,29 +299,20 @@ for (int fold = 0; fold < 1; fold++) {
 	/* Populate sameObj predicate.*/
 	int numTestEx_sameObj = 0;
 	for (int s = 0; s < folds; s++) {
-		HashMap<Integer,List<GroundTerm>> frames = seqs[s-1];
-		List<Integer> frameID = frames.keySet().asList();
-		Collections.sort(frameID);
-		List<GroundTerm> bboxes1, bboxes2;
-		for (int i = 0; i < frameID.size()-1; i++) {
-			bboxes1 = frames.get(frameID[i]);
-			bboxes2 = frames.get(frameID[i+1]);
-			for (GroundTerm bb1 : bboxes1) {
-				for (GroundTerm bb2 : bboxes2) {
-					if (s != fold) {
-						RandomVariableAtom rv = trainDB.getAtom(sameObj, bb1, bb2);
-						trainDB.commit(rv);
-					}
-					else {
-						RandomVariableAtom rv = testDB.getAtom(sameObj, bb1, bb2);
-						testDB.commit(rv);
-						++numTestEx_sameObj;
-					}
-				}
+		if (s != fold) {
+			for (GroundTerm[] terms : potentialMatchesInSeq[s]) {
+				RandomVariableAtom rv = (RandomVariableAtom)trainDB.getAtom(sameObj, terms[0], terms[1]);
+				trainDB.commit(rv);
 			}
 		}
-	}
-	
+		else {
+			for (GroundTerm[] terms : potentialMatchesInSeq[s]) {
+				RandomVariableAtom rv = (RandomVariableAtom)testDB.getAtom(sameObj, terms[0], terms[1]);
+				testDB.commit(rv);
+				++numTestEx_sameObj;
+			}
+		}
+	}	
 
 	/* Need to close testDB so that we can use write_te for multiple databases. */	
 	testDB.close();
@@ -365,8 +348,8 @@ for (int fold = 0; fold < 1; fold++) {
 		testDB.close();
 	
 		/* Evaluate doing predicate */
-		Database predDB = data.getDatabase(write_te, [doing] as Set);
-		Database truthDB = data.getDatabase(testPartLab, [doing] as Set);
+		Database predDB = data.getDatabase(write_te, [doing,sameObj] as Set);
+		Database truthDB = data.getDatabase(testPartLab, [doing,sameObj] as Set);
 		def comparator = new DiscretePredictionComparator(predDB);
 		comparator.setBaseline(truthDB);
 		comparator.setResultFilter(new MaxValueFilter(doing, 1));
@@ -374,12 +357,7 @@ for (int fold = 0; fold < 1; fold++) {
 		DiscretePredictionStatistics stats = comparator.compare(doing, numTestEx_doing);
 		System.out.println("F1 Action:  " + stats.getF1(DiscretePredictionStatistics.BinaryClass.POSITIVE));
 		stats_doing.get(config).add(fold, stats)
-		predDB.close();
-		truthDB.close();
-	
 		/* Evaluate doing predicate */
-		predDB = data.getDatabase(write_te, [doing] as Set);
-		truthDB = data.getDatabase(testPartLab, [doing] as Set);
 		comparator = new DiscretePredictionComparator(predDB);
 		comparator.setBaseline(truthDB);
 		comparator.setThreshold(0.5);

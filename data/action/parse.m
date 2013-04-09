@@ -18,7 +18,7 @@ fid_action = fopen([fid_pfx 'action.txt'], 'w');
 fid_hogaction = fopen([fid_pfx 'hogaction.txt'], 'w');
 fid_acdaction = fopen([fid_pfx 'acdaction.txt'], 'w');
 fid_sameobj = fopen([fid_pfx 'sameobj.txt'], 'w');
-fid_seqframes = fopen([fid_pfx 'seqframes.txt'], 'w');
+fid_seqframes = fopen([fid_pfx 'inseqframes.txt'], 'w');
 
 for s=1:length(anno)
 	if length(anno{s}) > maxFrames
@@ -30,10 +30,6 @@ for s=1:length(anno)
 		if length(anno{s}{f}) > maxBoxes
 			error('Too many boxes in seq %d, frame %d: %d boxes', s, f, length(anno{s}{f}))
 		end
-		% sequential frames predicate (because PSL is stupid)
-% 		if f > 1
-% 			fprintf(fid_seqframes, '%d\t%d\n', frid-1, frid);
-% 		end
 		for b=1:length(anno{s}{f})
 			% bounding box ID
 			bbid = frid*maxBoxes + b;
@@ -96,7 +92,7 @@ fid_action = fopen([fid_pfx 'action.txt'], 'w');
 fid_hogaction = fopen([fid_pfx 'hogaction.txt'], 'w');
 fid_acdaction = fopen([fid_pfx 'acdaction.txt'], 'w');
 fid_sameobj = fopen([fid_pfx 'sameobj.txt'], 'w');
-fid_seqframes = fopen([fid_pfx 'seqframes.txt'], 'w');
+fid_seqframes = fopen([fid_pfx 'inseqframes.txt'], 'w');
 
 for s=1:length(anno)
 	if length(anno{s}) > maxFrames
@@ -108,10 +104,6 @@ for s=1:length(anno)
 		if length(anno{s}{f}) > maxBoxes
 			error('Too many boxes in seq %d, frame %d: %d boxes', s, f, length(anno{s}{f}))
 		end
-		% sequential frames predicate (because PSL is stupid)
-% 		if f > 1
-% 			fprintf(fid_seqframes, '%d\t%d\n', frid-1, frid);
-% 		end
 		for b=1:length(anno{s}{f})
 			% bounding box ID
 			bbid = frid*maxBoxes + b;

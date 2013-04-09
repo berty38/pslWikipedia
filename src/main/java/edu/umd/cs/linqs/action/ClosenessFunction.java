@@ -6,8 +6,11 @@ import edu.umd.cs.psl.model.argument.GroundTerm;
 import edu.umd.cs.psl.model.argument.IntegerAttribute;
 import edu.umd.cs.psl.model.function.ExternalFunction;
 
-class DistanceFunction implements ExternalFunction {
+class ClosenessFunction implements ExternalFunction {
 
+	public static final double DEFAULT_SIGMA = 1;
+	public static final double DEFAULT_THRESH = 1e-2;
+	
 	private static final ArgumentType[] argTypes = new ArgumentType[]{
 		ArgumentType.Integer,ArgumentType.Integer,	// x-coord
 		ArgumentType.Integer,ArgumentType.Integer,	// y-coord
@@ -15,8 +18,16 @@ class DistanceFunction implements ExternalFunction {
 		ArgumentType.Integer,ArgumentType.Integer	// height
 		};
 	
-	public DistanceFunction() {
-		
+	private final double sigma;
+	private final double thresh;
+	
+	public ClosenessFunction() {
+		this(DEFAULT_SIGMA, DEFAULT_THRESH);
+	}
+	
+	public ClosenessFunction(final double sigma, final double thresh) {
+		this.sigma = sigma;
+		this.thresh = thresh;
 	}
 	
 	@Override
@@ -34,9 +45,9 @@ class DistanceFunction implements ExternalFunction {
 		//TODO: modify distance function to something more sophisticated
 		double dx = Math.abs(x1-x2);
 		double dy = Math.abs(y1-y2);
-		double d = Math.exp(-(dx*dx + dy*dy));
+		double v = Math.exp(-(dx*dx + dy*dy) / sigma);
 		
-		return d;
+		return v < thresh ? 0.0 : v;
 	}
 
 	@Override
