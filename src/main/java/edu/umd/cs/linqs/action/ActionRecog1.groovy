@@ -78,7 +78,7 @@ methods = ["MLE"];
 configGenerator.setLearningMethods(methods);
 
 /* MLE/MPLE options */
-configGenerator.setVotedPerceptronStepCounts([100]);
+configGenerator.setVotedPerceptronStepCounts([20]);
 configGenerator.setVotedPerceptronStepSizes([(double) 1.0]);
 
 /* MM options */
@@ -130,18 +130,18 @@ m.add function: "close", implementation: new ClosenessFunction(1e5, 1e-1);
 
 for (int a1 : actions) {
 	// Priors on actions
-	m.add rule: ~doing(BB1,a1), weight: 1.0, squared: sq;
+//	m.add rule: ~doing(BB1,a1), weight: 1.0, squared: sq;
 
 	// HOG-based SVM probabilities
 	m.add rule: hogAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
 	
 	// ACD-based SVM probabilities
-//	m.add rule: acdAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
+	m.add rule: acdAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
 
 	// Relational rules (same action)
 	for (int a2 : actions) {
 		// If BB1,BB2 in sequential frames, and BB1 is doing action a1, then BB2 is doing action a2.
-//		m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
+		m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
 		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is close, then BB2 is doing action a2.
 		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 1.0, squared: sq;
 		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is far, then BB2 is doing action a2.
@@ -163,6 +163,9 @@ m.add rule: ( inSeqFrames(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H
 
 // Prior on sameObj
 m.add rule: ~sameObj(BB1,BB2), weight: 1.0, squared: sq;
+
+// Partial functional constraint on sameObj
+m.add PredicateConstraint.PartialFunctional, on: sameObj;
 
 log.info("Model: {}", m)
 
@@ -355,8 +358,9 @@ for (int fold = 0; fold < 1; fold++) {
 		comparator.setResultFilter(new MaxValueFilter(doing, 1));
 		comparator.setThreshold(Double.MIN_VALUE) // treat best value as true as long as it is nonzero
 		DiscretePredictionStatistics stats = comparator.compare(doing, numTestEx_doing);
-		System.out.println("F1 Action:  " + stats.getF1(DiscretePredictionStatistics.BinaryClass.POSITIVE));
-		stats_doing.get(config).add(fold, stats)
+		System.out.println("F1  Action:  " + stats.getF1(DiscretePredictionStatistics.BinaryClass.POSITIVE));
+		System.out.println("Acc Action:  " + stats.getAccuracy());
+		stats_doing.get(config).add(fold, stats);
 		/* Evaluate doing predicate */
 		comparator = new DiscretePredictionComparator(predDB);
 		comparator.setBaseline(truthDB);
