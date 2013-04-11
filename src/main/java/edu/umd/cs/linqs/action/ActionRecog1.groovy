@@ -20,14 +20,13 @@ import edu.umd.cs.psl.database.rdbms.RDBMSDataStore
 import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver
 import edu.umd.cs.psl.database.rdbms.driver.H2DatabaseDriver.Type
 import edu.umd.cs.psl.evaluation.result.FullInferenceResult
-import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionComparator
 import edu.umd.cs.psl.evaluation.statistics.DiscretePredictionStatistics
-import edu.umd.cs.psl.evaluation.statistics.filter.MaxValueFilter
+import edu.umd.cs.psl.evaluation.statistics.MulticlassPredictionComparator
+import edu.umd.cs.psl.evaluation.statistics.MulticlassPredictionStatistics
 import edu.umd.cs.psl.groovy.*
 import edu.umd.cs.psl.model.argument.ArgumentType
 import edu.umd.cs.psl.model.argument.GroundTerm
 import edu.umd.cs.psl.model.argument.IntegerAttribute
-import edu.umd.cs.psl.model.argument.UniqueID
 import edu.umd.cs.psl.model.argument.Variable
 import edu.umd.cs.psl.model.atom.GroundAtom
 import edu.umd.cs.psl.model.atom.QueryAtom
@@ -36,7 +35,6 @@ import edu.umd.cs.psl.model.kernel.CompatibilityKernel
 import edu.umd.cs.psl.model.parameters.Weight
 import edu.umd.cs.psl.ui.loading.*
 import edu.umd.cs.psl.util.database.Queries
-
 
 /*** CONFIGURATION PARAMETERS ***/
 
@@ -232,9 +230,9 @@ for (GroundAtom a : atoms) {
 	potentialMatchesInSeq[s].add(terms);
 }
 db.close();
-Set<GroundTerm> actionTerms = new HashSet<GroundTerm>();
-for (int a : actions) {
-	actionTerms.add(new IntegerAttribute(a));
+Map<GroundTerm,Integer> actionMap = new HashMap<GroundTerm,Integer>();
+for (int i = 0; i < actions.length; i++) {
+	actionMap.put(new IntegerAttribute(actions[i]), i);
 }
 
 
@@ -242,12 +240,12 @@ for (int a : actions) {
 
 log.info("Starting experiments.");
 
-Map<String, List<DiscretePredictionStatistics>> stats_doing = new HashMap<String, List<DiscretePredictionStatistics>>()
+Map<String, List<MulticlassPredictionStatistics>> stats_doing = new HashMap<String, List<MulticlassPredictionStatistics>>()
 for (ConfigBundle method : configs)
-	stats_doing.put(method, new ArrayList<DiscretePredictionStatistics>())
-Map<String, List<DiscretePredictionStatistics>> stats_sameObj = new HashMap<String, List<DiscretePredictionStatistics>>()
-for (ConfigBundle method : configs)
-	stats_sameObj.put(method, new ArrayList<DiscretePredictionStatistics>())
+	stats_doing.put(method, new ArrayList<MulticlassPredictionStatistics>())
+//Map<String, List<DiscretePredictionStatistics>> stats_sameObj = new HashMap<String, List<DiscretePredictionStatistics>>()
+//for (ConfigBundle method : configs)
+//	stats_sameObj.put(method, new ArrayList<DiscretePredictionStatistics>())
 	
 //for (int fold = 0; fold < folds; fold++) {
 for (int fold = 0; fold < 1; fold++) {
@@ -281,7 +279,7 @@ for (int fold = 0; fold < 1; fold++) {
 	Variable BBox = new Variable("BBox");
 	Variable Action = new Variable("Action");
 	Map<Variable, Set<GroundTerm>> subs = new HashMap<Variable, Set<GroundTerm>>();
-	subs.put(Action, actionTerms);
+	subs.put(Action, actionMap.keySet());
 	// Get all bbox ground terms
 	Set<GroundTerm> bboxTerms_tr = new HashSet<GroundTerm>();
 	Set<GroundTerm> bboxTerms_te = new HashSet<GroundTerm>();
@@ -353,21 +351,27 @@ for (int fold = 0; fold < 1; fold++) {
 		/* Evaluate doing predicate */
 		Database predDB = data.getDatabase(write_te, [doing,sameObj] as Set);
 		Database truthDB = data.getDatabase(testPartLab, [doing,sameObj] as Set);
-		def comparator = new DiscretePredictionComparator(predDB);
+		def comparator = new MulticlassPredictionComparator(predDB);
 		comparator.setBaseline(truthDB);
-		comparator.setResultFilter(new MaxValueFilter(doing, 1));
-		comparator.setThreshold(Double.MIN_VALUE) // treat best value as true as long as it is nonzero
-		DiscretePredictionStatistics stats = comparator.compare(doing, numTestEx_doing);
-		System.out.println("F1  Action:  " + stats.getF1(DiscretePredictionStatistics.BinaryClass.POSITIVE));
-		System.out.println("Acc Action:  " + stats.getAccuracy());
+		MulticlassPredictionStatistics stats = comparator.compare(doing, actionMap, 1);
+		log.info("F1  ACTION: {}", stats.getF1());
+		log.info("Acc ACTION: {}", stats.getAccuracy());
 		stats_doing.get(config).add(fold, stats);
-		/* Evaluate doing predicate */
-		comparator = new DiscretePredictionComparator(predDB);
-		comparator.setBaseline(truthDB);
-		comparator.setThreshold(0.5);
-		stats = comparator.compare(doing, numTestEx_sameObj);
-		System.out.println("F1 SameObj:  " + stats.getF1(DiscretePredictionStatistics.BinaryClass.POSITIVE));
-		stats_sameObj.get(config).add(fold, stats)
+//		def comparator = new DiscretePredictionComparator(predDB);
+//		comparator.setBaseline(truthDB);
+//		comparator.setResultFilter(new MaxValueFilter(doing, 1));
+//		comparator.setThreshold(Double.MIN_VALUE) // treat best value as true as long as it is nonzero
+//		DiscretePredictionStatistics stats = comparator.compare(doing, numTestEx_doing);
+//		System.out.println("F1  Action:  " + stats.getF1(DiscretePredictionStatistics.BinaryClass.POSITIVE));
+//		System.out.println("Acc Action:  " + stats.getAccuracy());
+//		stats_doing.get(config).add(fold, stats);
+//		/* Evaluate doing predicate */
+//		comparator = new DiscretePredictionComparator(predDB);
+//		comparator.setBaseline(truthDB);
+//		comparator.setThreshold(0.5);
+//		stats = comparator.compare(doing, numTestEx_sameObj);
+//		System.out.println("F1 SameObj:  " + stats.getF1(DiscretePredictionStatistics.BinaryClass.POSITIVE));
+//		stats_sameObj.get(config).add(fold, stats)
 		predDB.close();
 		truthDB.close();
 	}
