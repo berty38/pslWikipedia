@@ -30,14 +30,17 @@ public class WeightLearner {
 		if (method.equals("MLE")) {
 			MaxLikelihoodMPE mle = new MaxLikelihoodMPE(m, db, labelsDB, config);
 			mle.learn();
+			mle.close();
 		}
 		else if (method.equals("MPLE")) {
 			MaxPseudoLikelihood mple = new MaxPseudoLikelihood(m, db, labelsDB, config);
 			mple.learn();
+			mple.close();
 		}
 		else if (method.equals("MM")) {
 			MaxMargin mm = new MaxMargin(m, db, labelsDB, config);
 			mm.learn();
+			mm.close();
 		}
 //		else if (method.equals("HEMRandOM")) {
 //			HardEMRandOM hardRandOM = new HardEMRandOM(m, db, labelsDB, config);

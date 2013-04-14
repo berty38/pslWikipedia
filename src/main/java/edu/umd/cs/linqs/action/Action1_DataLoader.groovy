@@ -21,7 +21,8 @@ Logger log = LoggerFactory.getLogger(this.class)
 ConfigManager cm = ConfigManager.getManager();
 ConfigBundle cb = cm.getBundle("action");
 
-def defPath = "data/action/action";// System.getProperty("java.io.tmpdir") + "/action"
+//def defPath = "data/action/action";
+def defPath = System.getProperty("java.io.tmpdir") + "/action"
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), cb)
 
@@ -72,7 +73,7 @@ Inserter[] inserters;
 inserters = InserterUtils.getMultiPartitionInserters(data, doing, partitions[1], numSeqs);
 InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "action.txt");
 inserters = InserterUtils.getMultiPartitionInserters(data, sameObj, partitions[1], numSeqs);
-InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "sameObj.txt");
+InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "sameobj.txt");
 
 /* Observations */
 inserters = InserterUtils.getMultiPartitionInserters(data, inFrame, partitions[0], numSeqs);

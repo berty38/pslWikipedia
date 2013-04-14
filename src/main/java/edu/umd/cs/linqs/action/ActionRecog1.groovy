@@ -55,7 +55,8 @@ Logger log = LoggerFactory.getLogger(this.class)
 ConfigManager cm = ConfigManager.getManager();
 ConfigBundle cb = cm.getBundle("action");
 
-def defPath = "data/action/action";// System.getProperty("java.io.tmpdir") + "/action"
+//def defPath = "data/action/action";
+def defPath = System.getProperty("java.io.tmpdir") + "/action"
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, false), cb)
 
@@ -200,7 +201,7 @@ for (int i = 0; i < actions.size(); i++) {
 
 log.info("Starting experiments.");
 
-int numFolds = 44;
+int numFolds = 4;
 
 Map<String, List<MulticlassPredictionStatistics>> stats_doing = new HashMap<String, List<MulticlassPredictionStatistics>>()
 for (ConfigBundle method : configs)
@@ -311,6 +312,7 @@ for (int fold = 0; fold < numFolds; fold++) {
 		MPEInference mpe = new MPEInference(m, testDB, config)
 		FullInferenceResult result = mpe.mpeInference()
 		log.info("Objective: {}", result.getTotalWeightedIncompatibility())
+		mpe.close();
 		testDB.close();
 	
 		/* Evaluate doing predicate */
