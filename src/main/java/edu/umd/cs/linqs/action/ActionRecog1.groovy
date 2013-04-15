@@ -337,6 +337,9 @@ for (int fold = 0; fold < numFolds; fold++) {
 	/* Empty the write partitions */
 	data.deletePartition(write_tr);
 	data.deletePartition(write_te);
+	
+	/* Give the GC a stern suggestion that it should take out the trash. */
+	System.gc();
 }
 
 log.info("\n\nRESULTS\n");
@@ -363,8 +366,8 @@ for (ConfigBundle config : configs) {
 	/* Cummulative statistics */
 	ConfusionMatrix cumCMat = ConfusionMatrix.aggregate(cmats);
 	def cumStats = new MulticlassPredictionStatistics(cumCMat);
-	log.info("\n{}\n Cumm F1: {}\n Cumm Acc: {}\n", configName, cumStats.getF1(), cumStats.getF1());
-	log.info("\nCumm Precision Matrix:\n{}", cumCMat.getPrecisionMatrix().toMatlabString(3));
+	log.info("\n{}\n Cum F1: {}\n Cum Acc: {}\n", configName, cumStats.getF1(), cumStats.getF1());
+	log.info("\nCum Precision Matrix:\n{}", cumCMat.getPrecisionMatrix().toMatlabString(3));
 }
 
 
