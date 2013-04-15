@@ -35,18 +35,18 @@ import edu.umd.cs.psl.ui.loading.*
 import edu.umd.cs.psl.util.database.Queries
 
 
-//ConfusionMatrix cmat = new ConfusionMatrix(3);
-//cmat.set(0,0,500);
-//cmat.set(0,1,300);
-//cmat.set(0,2,200);
-//cmat.set(1,1,200);
-//cmat.set(2,1,400);
-//System.out.println(cmat.toMatlabString());
-//SquareMatrix pmat = cmat.getPrecisionMatrix();
-//System.out.println(pmat);
-//SquareMatrix rmat = cmat.getRecallMatrix();
-//System.out.println(rmat);
-//System.out.println(SquareMatrix.average([pmat,rmat]).toMatlabString(5))
+//ConfusionMatrix cmat1 = new ConfusionMatrix(3);
+//cmat1.set(0,0,500);
+//cmat1.set(0,1,300);
+//cmat1.set(0,2,200);
+//cmat1.set(1,1,200);
+//cmat1.set(2,1,400);
+//System.out.println(cmat1.toMatlabString());
+//ObjectOutputStream obj_out = new ObjectOutputStream(new FileOutputStream("matrix.data"));
+//obj_out.writeObject(cmat1);
+//ObjectInputStream obj_in = new ObjectInputStream(new FileInputStream("matrix.data"));
+//ConfusionMatrix cmat2 = (ConfusionMatrix)obj_in.readObject();
+//System.out.println(cmat2.toMatlabString());
 //return 0;
 
 /*** CONFIGURATION PARAMETERS ***/
@@ -60,9 +60,20 @@ def defPath = System.getProperty("java.io.tmpdir") + "/action"
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, false), cb)
 
+def outPath = "output/action/";
+
 int numSeqs = 44;
 
 def sq = cb.getBoolean("squared", true);
+
+/* Which fold are we running? */
+int numFolds = 4;
+int startFold = 0;
+int endFold = numFolds;
+if (args.length >= 1) {
+	startFold = Integer.parseInt(args[0]);
+	endFold = startFold + 1;
+}
 
 
 /** EXPERIMENT CONFIG **/
@@ -201,13 +212,11 @@ for (int i = 0; i < actions.size(); i++) {
 
 log.info("Starting experiments.");
 
-int numFolds = 4;
-
 Map<String, List<MulticlassPredictionStatistics>> stats_doing = new HashMap<String, List<MulticlassPredictionStatistics>>()
 for (ConfigBundle method : configs)
 	stats_doing.put(method, new ArrayList<MulticlassPredictionStatistics>())
 
-for (int fold = 0; fold < numFolds; fold++) {
+for (int fold = startFold; fold < endFold; fold++) {
 //for (int fold = 0; fold < 2; fold++) {
 	
 	log.info("\n\n*** STARTING FOLD {} ***\n", fold)
@@ -325,8 +334,14 @@ for (int fold = 0; fold < numFolds; fold++) {
 		ConfusionMatrix conMat = stats.getConfusionMatrix();
 		System.out.println("Confusion Matrix:\n" + conMat.toMatlabString());
 		System.out.println("Precision matrix:\n" + conMat.getPrecisionMatrix().toMatlabString(3));
-		stats_doing.get(config).add(fold, stats);
+		stats_doing.get(config).add(stats);
 		predDB.close();
+		/* Write confusion matrix to file. */
+		File outFile = new File(outPath);
+		outFile.mkdirs();
+		FileOutputStream fileStr = new FileOutputStream(outPath + configName.replace('.', '_') + "-fold" + fold + ".matrix");
+		ObjectOutputStream objOutStr = new ObjectOutputStream(fileStr);
+		objOutStr.writeObject(conMat);
 	}
 	
 	/* Close all databases. */
@@ -350,10 +365,10 @@ for (ConfigBundle config : configs) {
 	double avgAcc = 0.0;
 	List<ConfusionMatrix> cmats = new ArrayList<ConfusionMatrix>();
 //	List<SquareMatrix> pmats = new ArrayList<SquareMatrix>();
-	for (int fold = 0; fold < stats.size(); fold++) {
-		avgF1 += stats.get(fold).getF1();
-		avgAcc += stats.get(fold).getAccuracy();
-		ConfusionMatrix cmat = stats.get(fold).getConfusionMatrix();
+	for (int i = 0; i < stats.size(); i++) {
+		avgF1 += stats.get(i).getF1();
+		avgAcc += stats.get(i).getAccuracy();
+		ConfusionMatrix cmat = stats.get(i).getConfusionMatrix();
 		cmats.add(cmat)
 //		pmats.add(cmat.getPrecisionMatrix());
 	}
