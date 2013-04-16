@@ -35,19 +35,6 @@ import edu.umd.cs.psl.ui.loading.*
 import edu.umd.cs.psl.util.database.Queries
 
 
-//ConfusionMatrix cmat1 = new ConfusionMatrix(3);
-//cmat1.set(0,0,500);
-//cmat1.set(0,1,300);
-//cmat1.set(0,2,200);
-//cmat1.set(1,1,200);
-//cmat1.set(2,1,400);
-//System.out.println(cmat1.toMatlabString());
-//ObjectOutputStream obj_out = new ObjectOutputStream(new FileOutputStream("matrix.data"));
-//obj_out.writeObject(cmat1);
-//ObjectInputStream obj_in = new ObjectInputStream(new FileInputStream("matrix.data"));
-//ConfusionMatrix cmat2 = (ConfusionMatrix)obj_in.readObject();
-//System.out.println(cmat2.toMatlabString());
-//return 0;
 
 /*** CONFIGURATION PARAMETERS ***/
 
@@ -76,7 +63,7 @@ if (args.length >= 1) {
 }
 
 
-/** EXPERIMENT CONFIG **/
+/*** EXPERIMENT CONFIG ***/
 
 ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("action");
 
@@ -169,7 +156,7 @@ for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKerne
 	initWeights.put(k, k.getWeight());
 
 
-/** DATASTORE PARTITIONS **/
+/*** DATASTORE PARTITIONS ***/
 
 int partCnt = 0;
 Partition[][] partitions = new Partition[2][numSeqs];
@@ -179,7 +166,7 @@ for (int s = 0; s < numSeqs; s++) {
 }
 	
 	
-/** GLOBAL DATA FOR DB POPULATION **/
+/*** GLOBAL DATA FOR DB POPULATION ***/
 
 List<List<GroundTerm>> bboxesInSeq = new ArrayList<List<GroundTerm>>();
 List<List<GroundTerm[]>> potentialMatchesInSeq = new ArrayList<List<GroundTerm[]>>();
@@ -221,7 +208,7 @@ for (int fold = startFold; fold < endFold; fold++) {
 	
 	log.info("\n\n*** STARTING FOLD {} ***\n", fold)
 		
-	/** SPLIT DATA **/
+	/*** SPLIT DATA ***/
 	
 	log.info("Splitting data ...");
 	
@@ -241,7 +228,7 @@ for (int fold = startFold; fold < endFold; fold++) {
 		}
 	}
 	
-	/** POPULATE DB ***/
+	/*** POPULATE DB ***/
 
 	log.info("Populating databases ...");
 		
@@ -357,33 +344,31 @@ for (int fold = startFold; fold < endFold; fold++) {
 	System.gc();
 }
 
-log.info("\n\nRESULTS\n");
-for (ConfigBundle config : configs) {
-	String configName = config.getString("name", "")
-	def stats = stats_doing.get(config);
-	double avgF1 = 0.0;
-	double avgAcc = 0.0;
-	List<ConfusionMatrix> cmats = new ArrayList<ConfusionMatrix>();
-//	List<SquareMatrix> pmats = new ArrayList<SquareMatrix>();
-	for (int i = 0; i < stats.size(); i++) {
-		avgF1 += stats.get(i).getF1();
-		avgAcc += stats.get(i).getAccuracy();
-		ConfusionMatrix cmat = stats.get(i).getConfusionMatrix();
-		cmats.add(cmat)
-//		pmats.add(cmat.getPrecisionMatrix());
-	}
-	/* Average statistics */
-	avgF1 /= stats.size();
-	avgAcc /= stats.size();
-	log.info("\n{}\n Avg F1: {}\n Avg Acc: {}\n", configName, avgF1, avgAcc);
-//	SquareMatrix avgPMat = SquareMatrix.average(pmats);
-//	log.info("\nAvg Precision Matrix:\n{}", avgPMat.toMatlabString(3));
-	/* Cummulative statistics */
-	ConfusionMatrix cumCMat = ConfusionMatrix.aggregate(cmats);
-	def cumStats = new MulticlassPredictionStatistics(cumCMat);
-	log.info("\n{}\n Cum F1: {}\n Cum Acc: {}\n", configName, cumStats.getF1(), cumStats.getF1());
-	log.info("\nCum Precision Matrix:\n{}", cumCMat.getPrecisionMatrix().toMatlabString(3));
-}
 
+/*** PRINT RESULTS ***/
+
+//log.info("\n\nRESULTS\n");
+//for (ConfigBundle config : configs) {
+//	String configName = config.getString("name", "")
+//	def stats = stats_doing.get(config);
+//	double avgF1 = 0.0;
+//	double avgAcc = 0.0;
+//	List<ConfusionMatrix> cmats = new ArrayList<ConfusionMatrix>();
+//	for (int i = 0; i < stats.size(); i++) {
+//		avgF1 += stats.get(i).getF1();
+//		avgAcc += stats.get(i).getAccuracy();
+//		ConfusionMatrix cmat = stats.get(i).getConfusionMatrix();
+//		cmats.add(cmat)
+//	}
+//	/* Average statistics */
+//	avgF1 /= stats.size();
+//	avgAcc /= stats.size();
+//	log.info("\n{}\n Avg F1: {}\n Avg Acc: {}\n", configName, avgF1, avgAcc);
+//	/* Cummulative statistics */
+//	ConfusionMatrix cumCMat = ConfusionMatrix.aggregate(cmats);
+//	def cumStats = new MulticlassPredictionStatistics(cumCMat);
+//	log.info("\n{}\n Cum F1: {}\n Cum Acc: {}\n", configName, cumStats.getF1(), cumStats.getF1());
+//	log.info("\nCum Precision Matrix:\n{}", cumCMat.getPrecisionMatrix().toMatlabString(3));
+//}
 
 
