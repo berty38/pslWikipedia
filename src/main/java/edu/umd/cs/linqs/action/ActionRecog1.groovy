@@ -54,6 +54,8 @@ int numSeqs = 44;
 
 def sq = cb.getBoolean("squared", true);
 
+def computeBaseline = true;
+
 /* Which fold are we running? */
 int numFolds = 4;
 int startFold = 0;
@@ -71,20 +73,18 @@ ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("actio
 configGenerator.setModelTypes(["quad"]);
 
 /* Learning methods */
-//methods = ["MLE","MPLE","MM"];
 methods = ["MLE"];
 configGenerator.setLearningMethods(methods);
 
 /* MLE/MPLE options */
-configGenerator.setVotedPerceptronStepCounts([20]);
+configGenerator.setVotedPerceptronStepCounts([5]);
 configGenerator.setVotedPerceptronStepSizes([(double) 1.0]);
 
 /* MM options */
-//configGenerator.setMaxMarginSlackPenalties([(double) 0.1, (double) 0.5, (double) 1.0]);
-configGenerator.setMaxMarginSlackPenalties([(double) 0.1]);
-configGenerator.setMaxMarginLossBalancingTypes([LossBalancingType.NONE]);
-configGenerator.setMaxMarginNormScalingTypes([NormScalingType.NONE]);
-configGenerator.setMaxMarginSquaredSlackValues([false]);
+//configGenerator.setMaxMarginSlackPenalties([(double) 0.1]);
+//configGenerator.setMaxMarginLossBalancingTypes([LossBalancingType.NONE]);
+//configGenerator.setMaxMarginNormScalingTypes([NormScalingType.NONE]);
+//configGenerator.setMaxMarginSquaredSlackValues([false]);
 
 List<ConfigBundle> configs = configGenerator.getConfigs();
 for (ConfigBundle config : configs)
@@ -101,16 +101,18 @@ PSLModel m = new PSLModel(this, data);
 
 //def obsPreds = [inFrame, inSameFrame, dims, hogAction, acdAction, inSeqFrames] as Set;
 //def targetPreds = [doing, sameObj] as Set;
-def obsPreds = [inFrame, inSameFrame, dims, hogAction, acdAction, inSeqFrames, sameObj] as Set;
-def targetPreds = [doing] as Set;
+def obsPreds = [inFrame, inSameFrame, dims, hogAction, acdAction, inSeqFrames] as Set;
+def targetPreds = [doing, sameObj] as Set;
 
 /* CONSTANTS */
 
-actions = [1,2,3,4,5];
-actionNames = ["crossing","standing","queueing","walking","talking"];
+def actions = [1,2,3,4,5];
+def actionNames = ["crossing","standing","queueing","walking","talking"];
+int numHogs = 75;
 
 // FUNCIONAL PREDICATES
-m.add function: "close", implementation: new ClosenessFunction(1e5, 1e-1);
+m.add function: "close", implementation: new ClosenessFunction(1e6, 0.1);
+m.add function: "seqClose", implementation: new ClosenessFunction(400, 0.7);
 
 /* FUNCTIONAL CONSTRAINTS */
 
@@ -118,16 +120,16 @@ m.add function: "close", implementation: new ClosenessFunction(1e5, 1e-1);
 m.add PredicateConstraint.Functional, on: doing;
 
 // (Inverse) Partial functional constraint on sameObj
-//m.add PredicateConstraint.PartialFunctional, on: sameObj;
-//m.add PredicateConstraint.PartialInverseFunctional, on: sameObj;
+m.add PredicateConstraint.PartialFunctional, on: sameObj;
+m.add PredicateConstraint.PartialInverseFunctional, on: sameObj;
 
 /* ID MAINTENANCE: BETWEEN-FRAME RULES */
 
 // If BB1 in F1, BB2 in F2, and F1,F2 are sequential, and BB1,BB2 are close, then BB1,BB2 are same object.
-//m.add rule: ( inSeqFrames(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
+m.add rule: ( inSeqFrames(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & seqClose(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> sameObj(BB1,BB2), weight: 1.0, squared: sq;
 
 // Prior on sameObj
-//m.add rule: ~sameObj(BB1,BB2), weight: 0.2, squared: sq;
+m.add rule: ~sameObj(BB1,BB2), weight: 0.01, squared: sq;
 
 /* ACTION RULES */
 
@@ -138,13 +140,18 @@ for (int a1 : actions) {
 	
 	// ACD-based SVM probabilities
 	m.add rule: acdAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
+	
+	// nhog features
+//	for (int h = 1; h <= numHogs; h++) {
+//		m.add rule: nhogScore(BB,h) >> doing(BB,a1), weight: 1.0/numHogs, squared: sq;
+//	}
 
 	// Continuity of actions
 	// If BB1,BB2 (in sequential frames) are the same object, and BB1 is doing action a1, then BB2 is doing action a1.
 	m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a1), weight: 1.0, squared: sq;
 
 	// Action transition
-	m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> ~doing(BB2,a1), weight: 0.2, squared: sq;
+//	m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> ~doing(BB2,a1), weight: 0.2, squared: sq;
 //	for (int a2 : actions) {
 //		if (a1 == a2) continue;
 //		// If BB1,BB2 (in sequential frames) are the same object, and BB1 is doing action a1, then BB2 is doing action a2.
@@ -152,15 +159,16 @@ for (int a1 : actions) {
 //	}
 
 	// Effect of proximity on actions
-	m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a1), weight: 0.2, squared: sq;
-	m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> ~doing(BB2,a1), weight: 0.1, squared: sq;
+	m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a1), weight: 0.1, squared: sq;
+	
+	// Frame consistency of action
 //	for (int a2 : actions) {
 //		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is close, then BB2 is doing action a2.
-//		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a2), weight: 0.2, squared: sq;
+//		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a2), weight: 0.2, squared: sq;
 //	}
 }
 
-log.info("Model: {}", m)
+//log.info("Model: {}", m)
 
 /* get all default weights */
 Map<CompatibilityKernel,Weight> initWeights = new HashMap<CompatibilityKernel, Weight>();
@@ -213,9 +221,9 @@ log.info("Starting experiments.");
 Map<String, List<MulticlassPredictionStatistics>> stats_doing = new HashMap<String, List<MulticlassPredictionStatistics>>()
 for (ConfigBundle method : configs)
 	stats_doing.put(method, new ArrayList<MulticlassPredictionStatistics>())
-
+List<MulticlassPredictionStatistics> stats_base = new ArrayList<MulticlassPredictionStatistics>()
+	
 for (int fold = startFold; fold < endFold; fold++) {
-//for (int fold = 0; fold < 2; fold++) {
 	
 	log.info("\n\n*** STARTING FOLD {} ***\n", fold)
 		
@@ -288,7 +296,7 @@ for (int fold = startFold; fold < endFold; fold++) {
 				++numTestEx_sameObj;
 			}
 		}
-	}	
+	}
 
 	/* Need to close testDB so that we can use write_te for multiple databases. */	
 	testDB.close();
@@ -296,6 +304,29 @@ for (int fold = startFold; fold < endFold; fold++) {
 	/* Label DBs */
 	Database labelDB = data.getDatabase(new Partition(partCnt++), targetPreds, (Partition[])trainPartsLab.toArray());
 	Database truthDB = data.getDatabase(new Partition(partCnt++), targetPreds, (Partition[])testPartsLab.toArray());
+	
+	/* Compute baseline accuracy using ACDs. */
+	if (computeBaseline) {
+		Partition write_base = new Partition(partCnt++);
+		Database baselineDB = data.getDatabase(write_base, obsPreds, (Partition[])testPartsObs.toArray());
+		atoms = Queries.getAllAtoms(baselineDB, acdAction);
+		for (GroundAtom a : atoms) {
+			GroundTerm[] terms = a.getArguments();
+			RandomVariableAtom rv = (RandomVariableAtom)baselineDB.getAtom(doing, terms);
+			rv.setValue(a.getValue());
+			baselineDB.commit(rv);
+		}
+		def compBaseline = new MulticlassPredictionComparator(baselineDB);
+		compBaseline.setBaseline(truthDB);
+		def baselineStats = compBaseline.compare(doing, actionMap, 1);
+		log.info("ACTION ACC: {}", baselineStats.getAccuracy());
+		log.info("ACTION F1:  {}", baselineStats.getF1());
+		ConfusionMatrix baselineConMat = baselineStats.getConfusionMatrix();
+		System.out.println("Confusion Matrix:\n" + baselineConMat.toMatlabString());
+		stats_base.add(baselineStats);
+		baselineDB.close();
+		data.deletePartition(write_base);
+	}
 
 	/*** EXPERIMENT ***/
 	
@@ -330,13 +361,13 @@ for (int fold = startFold; fold < endFold; fold++) {
 		/* Evaluate doing predicate */
 		def comparator = new MulticlassPredictionComparator(predDB);
 		comparator.setBaseline(truthDB);
-		MulticlassPredictionStatistics stats = comparator.compare(doing, actionMap, 1);
+		def stats = comparator.compare(doing, actionMap, 1);
 		log.info("ACTION ACC: {}", stats.getAccuracy());
 		log.info("ACTION F1:  {}", stats.getF1());
 		ConfusionMatrix conMat = stats.getConfusionMatrix();
 		System.out.println("Confusion Matrix:\n" + conMat.toMatlabString());
-		System.out.println("Precision matrix:\n" + conMat.getPrecisionMatrix().toMatlabString(3));
 		stats_doing.get(config).add(stats);
+		
 		/* Write confusion matrix to file. */
 		File outFile = new File(outPath);
 		outFile.mkdirs();
@@ -360,7 +391,7 @@ for (int fold = startFold; fold < endFold; fold++) {
 			}
 		}		
 		/* Close the prediction DB. */
-		predDB.close();		
+		predDB.close();
 	}
 	
 	/* Close all databases. */
@@ -378,6 +409,29 @@ for (int fold = startFold; fold < endFold; fold++) {
 
 
 /*** PRINT RESULTS ***/
+
+/* Only run this block if we're doing all folds at once. */
+if (args.size() == 0 && computeBaseline) {
+	log.info("\n\nBASELINE RESULTS\n");
+	double avgF1 = 0.0;
+	double avgAcc = 0.0;
+	List<ConfusionMatrix> cmats = new ArrayList<ConfusionMatrix>();
+	for (int i = 0; i < stats_base.size(); i++) {
+		avgF1 += stats_base.get(i).getF1();
+		avgAcc += stats_base.get(i).getAccuracy();
+		ConfusionMatrix cmat = stats_base.get(i).getConfusionMatrix();
+		cmats.add(cmat)
+	}
+	/* Average statistics */
+	avgF1 /= stats_base.size();
+	avgAcc /= stats_base.size();
+	log.info("\nBaseline\n Avg Acc: {}\n Avg F1:  {}\n", avgAcc, avgF1);
+	/* Cummulative statistics */
+	ConfusionMatrix cumCMat = ConfusionMatrix.aggregate(cmats);
+	def cumStats = new MulticlassPredictionStatistics(cumCMat);
+	log.info("\nBaseline\n Cum Acc: {}\n Cum F1:  {}\n", cumStats.getAccuracy(), cumStats.getF1());
+	log.info("\nCum Recall Matrix:\n{}", cumCMat.getRecallMatrix().toMatlabString(3));
+}
 
 /* Only run this block if we're doing all folds at once. */
 if (args.size() == 0) {
@@ -402,7 +456,7 @@ if (args.size() == 0) {
 		ConfusionMatrix cumCMat = ConfusionMatrix.aggregate(cmats);
 		def cumStats = new MulticlassPredictionStatistics(cumCMat);
 		log.info("\n{}\n Cum Acc: {}\n Cum F1:  {}\n", configName, cumStats.getAccuracy(), cumStats.getF1());
-		log.info("\nCum Precision Matrix:\n{}", cumCMat.getPrecisionMatrix().toMatlabString(3));
+		log.info("\nCum Recall Matrix:\n{}", cumCMat.getRecallMatrix().toMatlabString(3));
 	}
 }
 

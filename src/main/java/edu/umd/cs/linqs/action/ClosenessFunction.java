@@ -20,7 +20,7 @@ class ClosenessFunction implements ExternalFunction {
 	
 	private final double sigma;
 	private final double thresh;
-	
+		
 	public ClosenessFunction() {
 		this(DEFAULT_SIGMA, DEFAULT_THRESH);
 	}
@@ -45,7 +45,9 @@ class ClosenessFunction implements ExternalFunction {
 		//TODO: modify distance function to something more sophisticated
 		double dx = Math.abs(x1-x2);
 		double dy = Math.abs(y1-y2);
-		double v = Math.exp(-(dx*dx + dy*dy) / sigma);
+//		double dz = Math.abs(w1/((double)h1) - w2/((double)h2));
+		double d = dx*dx + dy*dy;
+		double v = Math.exp(-d / sigma);
 		
 		return v < thresh ? 0.0 : v;
 	}

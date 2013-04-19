@@ -19,6 +19,7 @@ fid_hogaction = fopen([fid_pfx 'hogaction.txt'], 'w');
 fid_acdaction = fopen([fid_pfx 'acdaction.txt'], 'w');
 fid_sameobj = fopen([fid_pfx 'sameobj.txt'], 'w');
 fid_seqframes = fopen([fid_pfx 'inseqframes.txt'], 'w');
+% fid_nhogscores = fopen([fid_pfx 'nhogscores.txt'], 'w');
 
 for s=1:length(anno)
 	if length(anno{s}) > maxFrames
@@ -61,6 +62,10 @@ for s=1:length(anno)
 					fprintf(fid_hogaction, '%d\t%d\t%f\n', bbid, actions(a), hogprob(a));
 					fprintf(fid_acdaction, '%d\t%d\t%f\n', bbid, actions(a), acdprob(a));
 				end
+				% write nhogscores
+% 				for l=1:length(feat{s}{f}(b).nhogscore)
+% 					fprintf(fid_nhogscores, '%d\t%d\t%f\n', bbid, l, feat{s}{f}(b).nhogscore(l));
+% 				end
 			end
 		end
 		% after determining who's in the current frame, write same-frame
@@ -93,6 +98,7 @@ fid_hogaction = fopen([fid_pfx 'hogaction.txt'], 'w');
 fid_acdaction = fopen([fid_pfx 'acdaction.txt'], 'w');
 fid_sameobj = fopen([fid_pfx 'sameobj.txt'], 'w');
 fid_seqframes = fopen([fid_pfx 'inseqframes.txt'], 'w');
+% fid_nhogscores = fopen([fid_pfx 'nhogscores.txt'], 'w');
 
 for s=1:length(anno)
 	if length(anno{s}) > maxFrames
@@ -135,6 +141,10 @@ for s=1:length(anno)
 					fprintf(fid_hogaction, '%d\t%d\t%f\n', bbid, actions(a), hogprob(a));
 					fprintf(fid_acdaction, '%d\t%d\t%f\n', bbid, actions(a), acdprob(a));
 				end
+				% write nhogscores
+% 				for l=1:length(feat{s}{f}(b).nhogscore)
+% 					fprintf(fid_nhogscores, '%d\t%d\t%f\n', bbid, l, feat{s}{f}(b).nhogscore(l));
+% 				end
 			end
 		end
 		% after determining who's in the current frame, write same-frame

@@ -48,6 +48,7 @@ m.add predicate: "inSeqFrames", types: [ArgumentType.UniqueID,ArgumentType.Uniqu
 m.add predicate: "dims", types: [ArgumentType.UniqueID,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer];
 m.add predicate: "hogAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 m.add predicate: "acdAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
+m.add predicate: "nhogScore", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 
 
 /** DATASTORE PARTITIONS **/
@@ -72,8 +73,7 @@ Inserter[] inserters;
 /* Ground truth */
 inserters = InserterUtils.getMultiPartitionInserters(data, doing, partitions[1], numSeqs);
 InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "action.txt");
-inserters = InserterUtils.getMultiPartitionInserters(data, sameObj, partitions[0], numSeqs);
-//inserters = InserterUtils.getMultiPartitionInserters(data, sameObj, partitions[1], numSeqs);
+inserters = InserterUtils.getMultiPartitionInserters(data, sameObj, partitions[1], numSeqs);
 InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "sameobj.txt");
 
 /* Observations */
@@ -89,5 +89,7 @@ inserters = InserterUtils.getMultiPartitionInserters(data, hogAction, partitions
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogaction.txt");
 inserters = InserterUtils.getMultiPartitionInserters(data, acdAction, partitions[0], numSeqs);
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "acdaction.txt");
+//inserters = InserterUtils.getMultiPartitionInserters(data, nhogScore, partitions[0], numSeqs);
+//InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "nhogscores.txt");
 
 log.info("Done!");
