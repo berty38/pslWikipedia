@@ -111,8 +111,9 @@ def actionNames = ["crossing","standing","queueing","walking","talking"];
 int numHogs = 75;
 
 // FUNCIONAL PREDICATES
-m.add function: "close", implementation: new ClosenessFunction(1e6, 0.1);
-m.add function: "seqClose", implementation: new ClosenessFunction(400, 0.7);
+m.add function: "close", implementation: new ClosenessFunction(0, 1e6, 0.1, true);
+m.add function: "seqClose", implementation: new ClosenessFunction(0, 400, 0.7, true);
+m.add function: "notMoved", implementation: new ClosenessFunction(10, 1.0, 0.5, false);
 
 /* FUNCTIONAL CONSTRAINTS */
 
@@ -157,6 +158,12 @@ for (int a1 : actions) {
 //		// If BB1,BB2 (in sequential frames) are the same object, and BB1 is doing action a1, then BB2 is doing action a2.
 //		m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a2), weight: 0.7, squared: sq;
 //	}
+	
+	// Stationary vs. mobile actions
+	if (a1 in [2,3,4])
+		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.5, squared: sq;
+	else
+		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.5, squared: sq;
 
 	// Effect of proximity on actions
 	m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a1), weight: 0.1, squared: sq;

@@ -8,8 +8,10 @@ import edu.umd.cs.psl.model.function.ExternalFunction;
 
 class ClosenessFunction implements ExternalFunction {
 
-	public static final double DEFAULT_SIGMA = 1;
-	public static final double DEFAULT_THRESH = 1e-2;
+	public static final int DEFAULT_HINGE = 0;
+	public static final double DEFAULT_SIGMA = 1.0;
+	public static final double DEFAULT_THRESH = 0.1;
+	public static final boolean DEFAULT_SQUARED = true;
 	
 	private static final ArgumentType[] argTypes = new ArgumentType[]{
 		ArgumentType.Integer,ArgumentType.Integer,	// x-coord
@@ -18,16 +20,39 @@ class ClosenessFunction implements ExternalFunction {
 		ArgumentType.Integer,ArgumentType.Integer	// height
 		};
 	
-	private final double sigma;
-	private final double thresh;
+	private int hinge;
+	private double sigma;
+	private double thresh;
+	private boolean squared;
 		
 	public ClosenessFunction() {
-		this(DEFAULT_SIGMA, DEFAULT_THRESH);
+		hinge = DEFAULT_HINGE;
+		sigma = DEFAULT_SIGMA;
+		thresh = DEFAULT_THRESH;
+		squared = DEFAULT_SQUARED;
 	}
 	
-	public ClosenessFunction(final double sigma, final double thresh) {
+	public ClosenessFunction(int hinge, double sigma, double thresh, boolean squared) {
+		this.hinge = hinge;
 		this.sigma = sigma;
 		this.thresh = thresh;
+		this.squared = squared;
+	}
+	
+	public void setHinge(int hinge) {
+		this.hinge = hinge;
+	}
+	
+	public void setSigma(double sigma) {
+		this.sigma = sigma;
+	}
+	
+	public void setThresh(double thresh) {
+		this.thresh = thresh;
+	}
+	
+	public void setSquared(boolean squared) {
+		this.squared = squared;
 	}
 	
 	@Override
@@ -43,11 +68,11 @@ class ClosenessFunction implements ExternalFunction {
 		int h2 = ((IntegerAttribute) args[7]).getValue().intValue();
 
 		//TODO: modify distance function to something more sophisticated
-		double dx = Math.abs(x1-x2);
-		double dy = Math.abs(y1-y2);
-//		double dz = Math.abs(w1/((double)h1) - w2/((double)h2));
-		double d = dx*dx + dy*dy;
-		double v = Math.exp(-d / sigma);
+		int dx = Math.abs(x1-x2);
+		int dy = Math.abs(y1-y2);
+		//double dz = Math.abs(w1/((double)h1) - w2/((double)h2));
+		int d = squared ? (dx*dx + dy*dy) : (dx + dy);
+		double v = Math.exp( -Math.max(hinge, d) / sigma );
 		
 		return v < thresh ? 0.0 : v;
 	}
