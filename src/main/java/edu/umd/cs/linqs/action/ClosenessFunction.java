@@ -72,7 +72,7 @@ class ClosenessFunction implements ExternalFunction {
 		int dy = Math.abs(y1-y2);
 		//double dz = Math.abs(w1/((double)h1) - w2/((double)h2));
 		int d = squared ? (dx*dx + dy*dy) : (dx + dy);
-		double v = Math.exp( -Math.max(hinge, d) / sigma );
+		double v = Math.exp( -Math.max(0, d-hinge) / sigma );
 		
 		return v < thresh ? 0.0 : v;
 	}
