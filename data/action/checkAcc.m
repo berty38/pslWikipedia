@@ -1,29 +1,23 @@
 
 clear
 
+% load file1.mat
+% actions = 1:5;
+
+load file2.mat
+actions = [1,2,3,5,6,7];
+
 maxFrames = 1000;
 maxBoxes = 100;
-
-%% 5-action Dataset
-
-load file1.mat
-
-actions = 1:5;
 
 ctp = 0; cfp = 0;
 accuracies = zeros(length(anno),1);
 
 for s=1:length(anno)
-	if length(anno{s}) > maxFrames
-		error('Too many frames in seq %d: %d frames', s, length(anno{s}))
-	end
 	tp = 0; fp = 0;
 	for f=1:length(anno{s})
 		frid = s*maxFrames + f;
 		inframe = [];
-		if length(anno{s}{f}) > maxBoxes
-			error('Too many boxes in seq %d, frame %d: %d boxes', s, f, length(anno{s}{f}))
-		end
 		for b=1:length(anno{s}{f})
 			% bounding box ID
 			bbid = frid*maxBoxes + b;

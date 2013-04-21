@@ -22,11 +22,11 @@ ConfigManager cm = ConfigManager.getManager();
 ConfigBundle cb = cm.getBundle("action");
 
 //def defPath = "data/action/action";
-def defPath = System.getProperty("java.io.tmpdir") + "/action1"
+def defPath = System.getProperty("java.io.tmpdir") + "/action2"
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), cb)
 
-int numSeqs = 44;
+int numSeqs = 63;
 
 
 /*** KB DEFINITION ***/
@@ -66,7 +66,7 @@ for (int s = 0; s < numSeqs; s++) {
 log.info("Loading data ...");
 
 def dataPath = "./data/action/"
-def filePfx = dataPath + "d1_";
+def filePfx = dataPath + "d2_";
 
 Inserter[] inserters;
 

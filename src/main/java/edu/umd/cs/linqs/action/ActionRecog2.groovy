@@ -44,20 +44,20 @@ ConfigManager cm = ConfigManager.getManager();
 ConfigBundle cb = cm.getBundle("action");
 
 //def defPath = "data/action/action";
-def defPath = System.getProperty("java.io.tmpdir") + "/action1"
+def defPath = System.getProperty("java.io.tmpdir") + "/action2"
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, false), cb)
 
 def outPath = "output/action/";
 
-int numSeqs = 44;
+int numSeqs = 63;
 
 def sq = cb.getBoolean("squared", true);
 
 def computeBaseline = true;
 
 /* Which fold are we running? */
-int numFolds = 4;
+int numFolds = 9;
 int startFold = 0;
 int endFold = numFolds;
 if (args.length >= 1) {
@@ -104,8 +104,8 @@ def targetPreds = [doing, sameObj] as Set;
 
 /* CONSTANTS */
 
-def actions = [1,2,3,4,5];
-def actionNames = ["crossing","standing","queueing","walking","talking"];
+def actions = [1,2,3,5,6,7];
+def actionNames = ["crossing","standing","queueing","talking","dancing","jogging"];
 int numHogs = 75;
 
 // FUNCIONAL PREDICATES

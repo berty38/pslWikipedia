@@ -1,16 +1,13 @@
+actions = 1:5;
 maxFrames = 1000;
 maxBoxes = 100;
-dx = cell(5,1);
-dy = cell(5,1);
+dx = cell(5,1); dy = cell(5,1);
 for a=1:5
-	dx{a} = [];
-	dy{a} = [];
+	dx{a} = []; dy{a} = [];
 end
-actions = 1:5;
 for s=1:length(anno)
 	for f=1:length(anno{s})
 		frid = s*maxFrames + f;
-		inframe = [];
 		for b=1:length(anno{s}{f})
 			% bounding box ID
 			bbid = frid*maxBoxes + b;
@@ -32,9 +29,15 @@ for s=1:length(anno)
 	end
 end
 
-
+dxg = [];
+dyg = [];
 for a=1:5
-	figure(a)
+% 	figure
 % 	hist(exp(-max(0,abs(dx{a})-6)))
-	hist(exp(-max(0,abs(dx{a})+abs(dy{a})-10) / 10))
+% 	hist(exp(-max(0,abs(dx{a})+abs(dy{a})-10)))
+	dxg = [dxg ; dx{a}];
+	dyg = [dyg ; dy{a}];
 end
+
+figure
+hist(exp(-max(0,abs(dxg)+abs(dyg)-40)));
