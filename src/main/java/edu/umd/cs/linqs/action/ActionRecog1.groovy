@@ -159,10 +159,10 @@ for (int a1 : actions) {
 //	}
 	
 	// Stationary vs. mobile actions
-	if (a1 in [2,3,4])
-		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.25, squared: sq;
-	else
-		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.25, squared: sq;
+//	if (a1 in [2,3,4])
+//		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.25, squared: sq;
+//	else
+//		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.25, squared: sq;
 
 	// Effect of proximity on actions
 	m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a1), weight: 0.1, squared: sq;
