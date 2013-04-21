@@ -85,10 +85,10 @@ inserters = InserterUtils.getMultiPartitionInserters(data, inSeqFrames, partitio
 InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "inseqframes.txt");
 inserters = InserterUtils.getMultiPartitionInserters(data, dims, partitions[0], numSeqs);
 InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "coords.txt");
-inserters = InserterUtils.getMultiPartitionInserters(data, hogAction, partitions[0], numSeqs);
+inserters = InserterUtils.getMultiPartitionInserters(data, acdAction, partitions[0], numSeqs);
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "acdaction.txt");
+//inserters = InserterUtils.getMultiPartitionInserters(data, hogAction, partitions[0], numSeqs);
 //InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogaction.txt");
-//inserters = InserterUtils.getMultiPartitionInserters(data, acdAction, partitions[0], numSeqs);
 //inserters = InserterUtils.getMultiPartitionInserters(data, nhogScore, partitions[0], numSeqs);
 //InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "nhogscores.txt");
 
