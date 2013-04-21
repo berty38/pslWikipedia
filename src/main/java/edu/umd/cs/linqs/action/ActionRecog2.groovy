@@ -57,7 +57,7 @@ def sq = cb.getBoolean("squared", true);
 def computeBaseline = true;
 
 /* Which fold are we running? */
-int numFolds = 9;
+int numFolds = 7;
 int startFold = 0;
 int endFold = numFolds;
 if (args.length >= 1) {
