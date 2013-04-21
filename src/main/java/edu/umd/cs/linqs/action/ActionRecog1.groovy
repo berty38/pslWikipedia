@@ -99,7 +99,7 @@ PSLModel m = new PSLModel(this, data);
 
 /* PREDICATES (STORED IN DB) */
 
-def obsPreds = [inFrame, inSameFrame, dims, hogAction, acdAction, inSeqFrames] as Set;
+def obsPreds = [inFrame, inSameFrame, dims, acdAction, inSeqFrames] as Set;
 def targetPreds = [doing, sameObj] as Set;
 
 /* CONSTANTS */
