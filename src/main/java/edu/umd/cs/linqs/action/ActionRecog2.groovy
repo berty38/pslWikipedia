@@ -48,7 +48,7 @@ def defPath = System.getProperty("java.io.tmpdir") + "/action2"
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, false), cb)
 
-def outPath = "output/action/";
+def outPath = "output/action2/";
 
 int numSeqs = 63;
 
@@ -57,7 +57,7 @@ def sq = cb.getBoolean("squared", true);
 def computeBaseline = true;
 
 /* Which fold are we running? */
-int numFolds = 7;
+int numFolds = 63;
 int startFold = 0;
 int endFold = numFolds;
 if (args.length >= 1) {
@@ -77,8 +77,8 @@ methods = ["MLE"];
 configGenerator.setLearningMethods(methods);
 
 /* MLE/MPLE options */
-configGenerator.setVotedPerceptronStepCounts([5]);
-configGenerator.setVotedPerceptronStepSizes([(double) 1.0]);
+configGenerator.setVotedPerceptronStepCounts([5,50]);
+configGenerator.setVotedPerceptronStepSizes([(double) 0.1, (double) 1.0]);
 
 /* MM options */
 //configGenerator.setMaxMarginSlackPenalties([(double) 0.1]);
@@ -172,6 +172,9 @@ for (int a1 : actions) {
 //		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is close, then BB2 is doing action a2.
 //		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a2), weight: 0.2, squared: sq;
 //	}
+	
+	// Frame label
+	m.add rule: ( inFrame(BB,S,F) & frameAction(F,a1) ) >> doing(BB,a1), weight: 0.1, squared: sq;
 }
 
 //log.info("Model: {}", m)
