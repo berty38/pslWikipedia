@@ -77,7 +77,7 @@ methods = ["MLE"];
 configGenerator.setLearningMethods(methods);
 
 /* MLE/MPLE options */
-configGenerator.setVotedPerceptronStepCounts([5]);
+configGenerator.setVotedPerceptronStepCounts([5,20,100]);
 configGenerator.setVotedPerceptronStepSizes([(double) 1.0]);
 
 /* MM options */
@@ -159,10 +159,10 @@ for (int a1 : actions) {
 //	}
 	
 	// Stationary vs. mobile actions
-//	if (a1 in [2,3,4])
-//		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.25, squared: sq;
-//	else
-//		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.25, squared: sq;
+	if (a1 in [2,3,4])
+		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.25, squared: sq;
+	else
+		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.25, squared: sq;
 
 	// Effect of proximity on actions
 	m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a1), weight: 0.1, squared: sq;
@@ -172,6 +172,9 @@ for (int a1 : actions) {
 //		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is close, then BB2 is doing action a2.
 //		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a2), weight: 0.2, squared: sq;
 //	}
+	
+	// Frame label
+	m.add rule: ( inFrame(BB,S,F) & frameAction(F,a1) ) >> doing(BB,a1), weight: 0.1, squared: sq;
 }
 
 //log.info("Model: {}", m)

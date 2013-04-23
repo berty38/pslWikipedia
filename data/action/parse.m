@@ -1,10 +1,10 @@
 
+%% 5-action Dataset
+
 clear
 
 maxFrames = 1000;
 maxBoxes = 100;
-
-%% 5-action Dataset
 
 load file1.mat
 
@@ -20,6 +20,7 @@ fid_acdaction = fopen([fid_pfx 'acdaction.txt'], 'w');
 fid_sameobj = fopen([fid_pfx 'sameobj.txt'], 'w');
 fid_seqframes = fopen([fid_pfx 'inseqframes.txt'], 'w');
 % fid_nhogscores = fopen([fid_pfx 'nhogscores.txt'], 'w');
+fid_framelabel = fopen([fid_pfx 'framelabel.txt'], 'w');
 
 for s=1:length(anno)
 	if length(anno{s}) > maxFrames
@@ -28,6 +29,8 @@ for s=1:length(anno)
 	for f=1:length(anno{s})
 		frid = s*maxFrames + f;
 		inframe = [];
+		labcnt = zeros(length(actions),1);
+		labscores = zeros(length(actions),1);
 		if length(anno{s}{f}) > maxBoxes
 			error('Too many boxes in seq %d, frame %d: %d boxes', s, f, length(anno{s}{f}))
 		end
@@ -62,6 +65,10 @@ for s=1:length(anno)
 					fprintf(fid_hogaction, '%d\t%d\t%f\n', bbid, actions(a), hogprob(a));
 					fprintf(fid_acdaction, '%d\t%d\t%f\n', bbid, actions(a), acdprob(a));
 				end
+				% count predicted frame labels
+				[~,mxidx] = max(acdprob);
+				labcnt(mxidx) = labcnt(mxidx) + 1;
+				labscores = labscores + feat{s}{f}(b).acscore';
 				% write nhogscores
 % 				for l=1:length(feat{s}{f}(b).nhogscore)
 % 					fprintf(fid_nhogscores, '%d\t%d\t%f\n', bbid, l, feat{s}{f}(b).nhogscore(l));
@@ -77,6 +84,17 @@ for s=1:length(anno)
 				fprintf(fid_sameframe, '%d\t%d\n', bbid1, bbid2);
 			end
 		end
+		% pick max occurring label as frame label
+% 		[~,mxidx] = max(labcnt);
+% 		fprintf(fid_framelabel, '%d\t%d\n', frid, actions(mxidx));
+		% pick max scoring label as frame label
+% 		[~,mxidx] = max(labscores);
+% 		fprintf(fid_framelabel, '%d\t%d\n', frid, actions(mxidx));
+		% convert frame label scores to probs
+		labprobs = svm2prob(labscores);
+		for a=1:length(labscores)
+			fprintf(fid_framelabel, '%d\t%d\t%f\n', frid, actions(a), labprobs(a));
+		end
 	end
 end
 
@@ -84,7 +102,11 @@ fclose('all');
 
 %% 6-action Dataset
 
-clear feat; clear anno; clear seqlab;
+clear
+
+maxFrames = 1000;
+maxBoxes = 100;
+
 load file2.mat
 
 actions = [1 2 3 5 6 7];
@@ -99,6 +121,7 @@ fid_acdaction = fopen([fid_pfx 'acdaction.txt'], 'w');
 fid_sameobj = fopen([fid_pfx 'sameobj.txt'], 'w');
 fid_seqframes = fopen([fid_pfx 'inseqframes.txt'], 'w');
 % fid_nhogscores = fopen([fid_pfx 'nhogscores.txt'], 'w');
+fid_framelabel = fopen([fid_pfx 'framelabel.txt'], 'w');
 
 for s=1:length(anno)
 	if length(anno{s}) > maxFrames
@@ -107,6 +130,8 @@ for s=1:length(anno)
 	for f=1:length(anno{s})
 		frid = s*maxFrames + f;
 		inframe = [];
+		labcnt = zeros(length(actions),1);
+		labscores = zeros(length(actions),1);
 		if length(anno{s}{f}) > maxBoxes
 			error('Too many boxes in seq %d, frame %d: %d boxes', s, f, length(anno{s}{f}))
 		end
@@ -141,6 +166,10 @@ for s=1:length(anno)
 					fprintf(fid_hogaction, '%d\t%d\t%f\n', bbid, actions(a), hogprob(a));
 					fprintf(fid_acdaction, '%d\t%d\t%f\n', bbid, actions(a), acdprob(a));
 				end
+				% count predicted frame labels
+				[~,mxidx] = max(acdprob);
+				labcnt(mxidx) = labcnt(mxidx) + 1;
+				labscores = labscores + feat{s}{f}(b).acscore';
 				% write nhogscores
 % 				for l=1:length(feat{s}{f}(b).nhogscore)
 % 					fprintf(fid_nhogscores, '%d\t%d\t%f\n', bbid, l, feat{s}{f}(b).nhogscore(l));
@@ -155,6 +184,17 @@ for s=1:length(anno)
 				% in-same-frame predicate
 				fprintf(fid_sameframe, '%d\t%d\n', bbid1, bbid2);
 			end
+		end
+		% pick max occurring label as frame label
+% 		[~,mxidx] = max(labcnt);
+% 		fprintf(fid_framelabel, '%d\t%d\n', frid, actions(mxidx));
+		% pick max scoring label as frame label
+% 		[~,mxidx] = max(labscores);
+% 		fprintf(fid_framelabel, '%d\t%d\n', frid, actions(mxidx));
+		% convert frame label scores to probs
+		labprobs = svm2prob(labscores);
+		for a=1:length(labscores)
+			fprintf(fid_framelabel, '%d\t%d\t%f\n', frid, actions(a), labprobs(a));
 		end
 	end
 end
