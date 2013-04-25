@@ -46,10 +46,10 @@ m.add predicate: "inFrame", types: [ArgumentType.UniqueID,ArgumentType.Integer,A
 m.add predicate: "inSameFrame", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 m.add predicate: "inSeqFrames", types: [ArgumentType.UniqueID,ArgumentType.UniqueID];
 m.add predicate: "dims", types: [ArgumentType.UniqueID,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer,ArgumentType.Integer];
+m.add predicate: "hogAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 m.add predicate: "acdAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
-m.add predicate: "frameAction", types: [ArgumentType.Integer,ArgumentType.Integer];
-//m.add predicate: "hogAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
-//m.add predicate: "nhogScore", types: [ArgumentType.UniqueID,ArgumentType.Integer];
+m.add predicate: "hogFrameAction", types: [ArgumentType.Integer,ArgumentType.Integer];
+m.add predicate: "acdFrameAction", types: [ArgumentType.Integer,ArgumentType.Integer];
 
 
 /** DATASTORE PARTITIONS **/
@@ -86,13 +86,13 @@ inserters = InserterUtils.getMultiPartitionInserters(data, inSeqFrames, partitio
 InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "inseqframes.txt");
 inserters = InserterUtils.getMultiPartitionInserters(data, dims, partitions[0], numSeqs);
 InserterUtils.loadDelimitedDataMultiPartition(inserters, filePfx + "coords.txt");
+inserters = InserterUtils.getMultiPartitionInserters(data, hogAction, partitions[0], numSeqs);
+InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogaction.txt");
 inserters = InserterUtils.getMultiPartitionInserters(data, acdAction, partitions[0], numSeqs);
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "acdaction.txt");
-inserters = InserterUtils.getMultiPartitionInserters(data, frameAction, partitions[0], numSeqs);
-InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "framelabel.txt", "\t", 1000);
-//inserters = InserterUtils.getMultiPartitionInserters(data, hogAction, partitions[0], numSeqs);
-//InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogaction.txt");
-//inserters = InserterUtils.getMultiPartitionInserters(data, nhogScore, partitions[0], numSeqs);
-//InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "nhogscores.txt");
+inserters = InserterUtils.getMultiPartitionInserters(data, hogFrameAction, partitions[0], numSeqs);
+InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogframelabel.txt", "\t", 1000);
+inserters = InserterUtils.getMultiPartitionInserters(data, acdFrameAction, partitions[0], numSeqs);
+InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "acdframelabel.txt", "\t", 1000);
 
 log.info("Done!");

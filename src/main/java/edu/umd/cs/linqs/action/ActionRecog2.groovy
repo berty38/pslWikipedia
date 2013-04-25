@@ -48,16 +48,17 @@ def defPath = System.getProperty("java.io.tmpdir") + "/action2"
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, false), cb)
 
-def outPath = "output/action2/";
+def outPath = "output/action2_9fold/";
+int numFolds = 9;
 
 int numSeqs = 63;
 
 def sq = cb.getBoolean("squared", true);
 
 def computeBaseline = true;
+def baselineMethod = "hog";
 
 /* Which fold are we running? */
-int numFolds = 63;
 int startFold = 0;
 int endFold = numFolds;
 if (args.length >= 1) {
@@ -99,7 +100,7 @@ PSLModel m = new PSLModel(this, data);
 
 /* PREDICATES (STORED IN DB) */
 
-def obsPreds = [inFrame, inSameFrame, dims, acdAction, inSeqFrames] as Set;
+def obsPreds = [inFrame, inSameFrame, inSeqFrames, dims, hogAction, acdAction, hogFrameAction, acdFrameAction] as Set;
 def targetPreds = [doing, sameObj] as Set;
 
 /* CONSTANTS */
@@ -135,20 +136,31 @@ m.add rule: ~sameObj(BB1,BB2), weight: 0.01, squared: sq;
 
 for (int a1 : actions) {
 
-	// HOG-based SVM probabilities
-//	m.add rule: hogAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
-	
-	// nhog features
-//	for (int h = 1; h <= numHogs; h++) {
-//		m.add rule: nhogScore(BB,h) >> doing(BB,a1), weight: 1.0/numHogs, squared: sq;
-//	}
-
-	// ACD-based SVM probabilities
-	m.add rule: acdAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
+	if (baselineMethod.equals("hog")) {
+		// HOG-based SVM probabilities
+		m.add rule: hogAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
+		// Frame label
+		m.add rule: ( inFrame(BB,S,F) & hogFrameAction(F,a1) ) >> doing(BB,a1), weight: 0.1, squared: sq;
+	}
+	else {
+		// ACD-based SVM probabilities
+		m.add rule: acdAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
+		// Frame label
+		m.add rule: ( inFrame(BB,S,F) & acdFrameAction(F,a1) ) >> doing(BB,a1), weight: 0.1, squared: sq;
+	}
 
 	// Continuity of actions
 	// If BB1,BB2 (in sequential frames) are the same object, and BB1 is doing action a1, then BB2 is doing action a1.
 	m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a1), weight: 1.0, squared: sq;
+	
+	// Effect of proximity on actions
+	m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a1), weight: 0.1, squared: sq;
+	
+	// Stationary vs. mobile actions
+//	if (a1 in [2,3,4])
+//		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.1, squared: sq;
+//	else
+//		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.1, squared: sq;
 
 	// Action transition
 //	m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> ~doing(BB2,a1), weight: 0.2, squared: sq;
@@ -158,23 +170,11 @@ for (int a1 : actions) {
 //		m.add rule: ( sameObj(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a2), weight: 0.7, squared: sq;
 //	}
 	
-	// Stationary vs. mobile actions
-//	if (a1 in [2,3,4])
-//		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.25, squared: sq;
-//	else
-//		m.add rule: ( sameObj(BB1,BB2) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & ~notMoved(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB1,a1), weight: 0.25, squared: sq;
-
-	// Effect of proximity on actions
-	m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) & dims(BB1,X1,Y1,W1,H1) & dims(BB2,X2,Y2,W2,H2) & close(X1,X2,Y1,Y2,W1,W2,H1,H2) ) >> doing(BB2,a1), weight: 0.1, squared: sq;
-	
 	// Frame consistency of action
 //	for (int a2 : actions) {
 //		// If BB1,BB2 in same frame, and BB1 is doing action a1, and BB2 is close, then BB2 is doing action a2.
 //		m.add rule: ( inSameFrame(BB1,BB2) & doing(BB1,a1) ) >> doing(BB2,a2), weight: 0.2, squared: sq;
 //	}
-	
-	// Frame label
-	m.add rule: ( inFrame(BB,S,F) & frameAction(F,a1) ) >> doing(BB,a1), weight: 0.1, squared: sq;
 }
 
 //log.info("Model: {}", m)
@@ -318,7 +318,10 @@ for (int fold = startFold; fold < endFold; fold++) {
 	if (computeBaseline) {
 		Partition write_base = new Partition(partCnt++);
 		Database baselineDB = data.getDatabase(write_base, obsPreds, (Partition[])testPartsObs.toArray());
-		atoms = Queries.getAllAtoms(baselineDB, acdAction);
+		if (baselineMethod.equals("hog"))
+			atoms = Queries.getAllAtoms(baselineDB, hogAction);
+		else
+			atoms = Queries.getAllAtoms(baselineDB, acdAction);
 		for (GroundAtom a : atoms) {
 			GroundTerm[] terms = a.getArguments();
 			RandomVariableAtom rv = (RandomVariableAtom)baselineDB.getAtom(doing, terms);
