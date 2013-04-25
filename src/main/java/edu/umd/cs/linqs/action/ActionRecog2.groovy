@@ -48,7 +48,7 @@ def defPath = System.getProperty("java.io.tmpdir") + "/action2"
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, false), cb)
 
-def outPath = "output/action2_9fold/";
+def outPath = "output/action2_9fold_hog/";
 int numFolds = 9;
 
 int numSeqs = 63;
