@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.umd.cs.psl.database.Database;
+import edu.umd.cs.psl.groovy.PSLModel;
 import edu.umd.cs.psl.model.argument.GroundTerm;
 import edu.umd.cs.psl.model.atom.GroundAtom;
 import edu.umd.cs.psl.model.predicate.Predicate;
@@ -45,6 +46,22 @@ public class DataOutputter {
 			}
 
 			bw.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public static void outputModel(String filename, PSLModel model) {
+		try {
+			File file = new File(filename);
+			if (file.getParentFile() != null)
+				file.getParentFile().mkdirs();
+			FileWriter fw = new FileWriter(file);
+			BufferedWriter bw = new BufferedWriter(fw);
+			bw.write(model.toString());
+		
+			bw.close();
+			fw.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
