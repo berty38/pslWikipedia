@@ -9,14 +9,14 @@ SPNfiles = {
 
 
 
-oDir = 'olivettiRunQuad';
-cDir = 'caltechRunQuad';
+oDir = '../output/vision/';
+cDir = '../output/vision/';
 
 files = {...
-    sprintf('%s/olivetti-left-rand-quad-mle-200-5.0.txt', oDir), ...
-    sprintf('%s/olivetti-bottom-rand-quad-mle-200-5.0.txt', oDir), ...
-    sprintf('%s/caltech-left-rand-quad-mle-200-5.0.txt', cDir), ...
-    sprintf('%s/caltech-bottom-rand-quad-mle-200-5.0.txt', cDir)};
+    sprintf('%s/olivetti-left-rand-quad-mle-100-5.0.txt', oDir), ...
+    sprintf('%s/olivetti-bottom-rand-quad-mle-100-5.0.txt', oDir), ...
+    sprintf('%s/caltech-left-rand-quad-mle-100-5.0.txt', cDir), ...
+    sprintf('%s/caltech-bottom-rand-quad-mle-100-5.0.txt', cDir)};
 h = 64;
 w = 64;
 
@@ -63,6 +63,8 @@ for task = 1:2
             bigImage = [bigImage;  row; zeros(1, size(row,2))];
         end
         imagesc(bigImage); colormap gray; axis image;
+        title('Click once on each face row you want to include.');
+        xlabel('Hit enter to continue to next set of faces');
         [x,y] = ginput;
         
         inds = (k-1)*10 + ceil(y/h);
@@ -75,11 +77,26 @@ for task = 1:2
         end
         
         imagesc(finalImage{task});
+        title('Currently selected faces. Hit any key to continue');
         pause;
     end
 end
 
-%%
+%% redraws image, can be used if finalInds is preloaded
+
+% comment these out if you want to choose new faces
+% these are the examples used by Bach et al. UAI 2013
+finalInds{1} = [1    11    21    31    41];
+finalInds{2} = [5    11    18    28    35];
+
+for task = 1:2
+    finalImage{task} = [];
+    for j = 1:length(finalInds{task})
+        i = finalInds{task}(j);
+        row = [truth{t}{i} vpad psl{t}{i} vpad spn{t}{i} vpad psl{t+1}{i} vpad spn{t+1}{i}];
+        finalImage{task} = [finalImage{task}; row; zeros(1, size(row,2))];
+    end
+end
 
 
 imwrite(uint8(round(finalImage{1})), 'images/olivettiFigNew200.png', 'png');
