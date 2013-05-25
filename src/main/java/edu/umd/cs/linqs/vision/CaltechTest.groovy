@@ -48,7 +48,7 @@ testLeft = true
 // train on randomly sampled pixels
 trainOnRandom = true
 // number of training faces
-numTraining = 100
+numTraining = 200
 // number of testing faces
 numTesting = 50
 
@@ -87,14 +87,14 @@ def expSetup = (testLeft? "left" : "bottom") + "-" + (trainOnRandom? "rand" : "s
 methods = ["MLE"];
 
 /* MLE/MPLE options */
-vpStepCounts = [200]
+vpStepCounts = [100]
 vpStepSizes = [5]
 
 
 ConfigManager cm = ConfigManager.getManager()
 ConfigBundle baseConfig = cm.getBundle("vision")
 
-boolean sq = false
+boolean sq = true
 
 /*
  * DEFINES EXPERIMENT CONFIGURATIONS
@@ -133,8 +133,8 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++)
 /*
  * INITIALIZES DATASTORE AND MODEL
  */
-//def defaultPath = System.getProperty("java.io.tmpdir") + "/"
-def defaultPath = "/scratch0/bert-uai13/"
+def defaultPath = System.getProperty("java.io.tmpdir") + "/"
+//def defaultPath = "/scratch0/bert-uai13/"
 String dbpath = baseConfig.getString("dbpath", defaultPath + "psl" + dataset)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), baseConfig)
 //DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Memory, dbpath, true), baseConfig)
@@ -337,7 +337,7 @@ for (int methodIndex = 0; methodIndex < methodNames.size(); methodIndex++) {
 		ImagePatchUtils.populatePixels(width, height, pixelBrightness, trainDB, id)
 	}
 	learn(m, trainDB, labelDB, methodConfigs.get(methodIndex), log)
-	System.out.println("Learned model " + methodNames.get(methodIndex) + "\n" + m.toString())
+//	System.out.println("Learned model " + methodNames.get(methodIndex) + "\n" + m.toString())
 
 	trainDB.close()
 	labelDB.close()
