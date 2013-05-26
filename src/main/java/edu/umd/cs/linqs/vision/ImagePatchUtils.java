@@ -216,6 +216,32 @@ public class ImagePatchUtils {
 		return densities;
 	}
 	
+	public static void populateHasMean(int width, int height, int numMeans, Predicate hasMean, Database data, UniqueID imageID) {
+		for (int m = 0; m < numMeans; m++) {
+			UniqueID meanID = data.getUniqueID(m);
+			int rvCount = 0;
+			int observedCount = 0;
+			int k = 0;
+			for (int i = 0; i < width; i++) {
+				for (int j = 0; j < width; j++) {
+					UniqueID pixelID = data.getUniqueID(k);
+					GroundAtom atom = data.getAtom(hasMean, imageID, pixelID, meanID);
+					if (atom instanceof RandomVariableAtom) {
+						((RandomVariableAtom) atom).setValue(0.0);
+						data.commit((RandomVariableAtom) atom);		
+						rvCount++;
+					}
+						else
+							observedCount++;
+					k++;
+				}
+			}
+			
+			log.debug("Image " + imageID + ", {} observed hasMean atoms, {} random variable hasMean atoms", observedCount, rvCount);
+		}
+	}
+	
+	
 	/**
 	 * 
 	 * @param hasMean

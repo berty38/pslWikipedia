@@ -39,7 +39,7 @@ testLeft = true
 // train on randomly sampled pixels
 trainOnRandom = false
 // number of training faces
-numTraining = 100
+numTraining = 5
 // number of testing faces
 numTesting = 50
 
@@ -86,6 +86,7 @@ PSLModel m = new PSLModel(this, data)
 
 numTypes = 2
 numMeans = 4
+variance = 0.1
 
 width = 64
 height = 64
@@ -154,7 +155,7 @@ Partition trainLatent = new Partition(6)
 dataDir = "data/vision"
 
 // construct observed mask
-boolean[] mask = new boolean[width * height]
+boolean[] testMask = new boolean[width * height]
 boolean[] negMask = new boolean[width * height]
 boolean[] trainMask = new boolean[width * height]
 boolean[] negTrainMask = new boolean[width * height]
@@ -162,13 +163,13 @@ int c = 0
 for (int x = 0; x < width; x++) {
 	for (int y = 0; y < height; y++) {
 		if (testLeft)
-			mask[c] = x >= (width / 2)
+			testMask[c] = x >= (width / 2)
 		else
-			mask[c] = y <= height / 2
+			testMask[c] = y <= height / 2
 
-		negMask[c] = !mask[c]
+		negMask[c] = !testMask[c]
 
-		trainMask[c] = mask[c]
+		trainMask[c] = testMask[c]
 		negTrainMask[c] = negMask[c]
 		c++
 	}
@@ -222,9 +223,9 @@ for (int i = 0; i < trainImages.size(); i++) {
 	}
 
 	UniqueID imageID = data.getUniqueID(i)
-	// TODO: Set hasMean of observed pixels
+	ImagePatchUtils.setObservedHasMean(hasMean, mean, imageID, trainReadDB, width, height, numMeans, variance, trainImages.get(i), trainMask)
 	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainReadDB, hierarchy, width, height, trainImages.get(i), trainMask)
-	// TODO: Set hasMean of label pixels
+	ImagePatchUtils.setObservedHasMean(hasMean, mean, imageID, trainLabelDB, width, height, numMeans, variance, trainImages.get(i), negTrainMask)
 	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
 }
 populateLatentVariables(trainImages.size(), pictureType, pictureTypes, trainLatentDB, random)
@@ -239,7 +240,6 @@ trainDB = data.getDatabase(trainWrite, trainObs)
 /** populate open variables **/
 for (int i = 0; i < trainImages.size(); i++) {
 	UniqueID imageID = data.getUniqueID(i)
-	// TODO: populate hasMean of observed pixels
 	ImagePatchUtils.populateHasMean(width, height, numMeans, hasMean, trainDB, imageID)
 }
 trainDB.close()
@@ -249,10 +249,10 @@ def testReadDB = data.getDatabase(testObs)
 def testLabelDB = data.getDatabase(testLabel)
 def testWriteDB = data.getDatabase(testWrite)
 for (int i = 0; i < testImages.size(); i++) {
-	def id = data.getUniqueID(i)
-	// TODO: Set hasMean of observed pixels
-	ImagePatchUtils.setPixels(pixelBrightness, id, testReadDB, hierarchy, width, height, testImages.get(i), mask)
-	ImagePatchUtils.setPixels(pixelBrightness, id, testLabelDB, hierarchy, width, height, testImages.get(i), negMask)
+	def imageID = data.getUniqueID(i)
+	ImagePatchUtils.setObservedHasMean(hasMean, mean, imageID, testReadDB, width, height, numMeans, variance, testImages.get(i), testMask)
+	ImagePatchUtils.setPixels(pixelBrightness, imageID, testReadDB, hierarchy, width, height, testImages.get(i), testMask)
+	ImagePatchUtils.setPixels(pixelBrightness, imageID, testLabelDB, hierarchy, width, height, testImages.get(i), negMask)
 }
 populateLatentVariables(testImages.size(), pictureType, pictureTypes, testWriteDB, random)
 
@@ -264,8 +264,8 @@ testLabelDB.close()
 testDB = data.getDatabase(testWrite, testObs)
 /** populate open variables **/
 for (int i = 0; i < testImages.size(); i++) {
-	UniqueID id = data.getUniqueID(i)
-	ImagePatchUtils.populatePixels(width, height, pixelBrightness, testDB, id)
+	UniqueID imageID = data.getUniqueID(i)
+	ImagePatchUtils.populateHasMean(width, height, numMeans, hasMean, testDB, imageID)
 }
 testDB.close()
 
