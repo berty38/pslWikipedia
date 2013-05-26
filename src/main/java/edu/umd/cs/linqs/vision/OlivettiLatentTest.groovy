@@ -39,9 +39,9 @@ testLeft = true
 // train on randomly sampled pixels
 trainOnRandom = false
 // number of training faces
-numTraining = 3
+numTraining = 100
 // number of testing faces
-numTesting = 3
+numTesting = 50
 
 dataset = "olivetti"
 
@@ -84,7 +84,7 @@ PSLModel m = new PSLModel(this, data)
  * DEFINE MODEL
  */
 
-numTypes = 3
+numTypes = 2
 
 width = 64
 height = 64
@@ -126,7 +126,7 @@ for (Patch p : hierarchy.getPatches().values()) {
 	for (Term type : pictureTypes) {
 		m.add rule: (picture(pic) & pictureType(pic, type)) >> pixelBrightness(patch, pic), weight: initialWeight, squared: sq
 		m.add rule: (picture(pic) & pictureType(pic, type)) >> ~pixelBrightness(patch, pic), weight: initialWeight, squared: sq
-		
+
 		m.add rule: (picture(pic) & pixelBrightness(patch, pic)) >> pictureType(pic, type), weight: initialWeight, squared: false
 		m.add rule: (picture(pic) & ~pixelBrightness(patch, pic)) >> pictureType(pic, type), weight: initialWeight, squared: false
 		m.add rule: (picture(pic) & pixelBrightness(patch, pic)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
@@ -192,7 +192,7 @@ ArrayList<double []> testImages = new ArrayList<double[]>()
 for (int i = 0; i < images.size(); i++) {
 	if (i < numTraining) {
 		trainImages.add(images.get(i))
-		//	} else if (i >= images.size() - numTesting) {
+	} else if (i >= images.size() - numTesting) {
 		testImages.add(images.get(i))
 	}
 }
@@ -350,12 +350,12 @@ private void populateLatentVariables(int numImages, Predicate latentVariable, It
 		int j = 0;
 		for (UniqueID type : latentStates) {
 			RandomVariableAtom latentAtom = db.getAtom(latentVariable, pic, type)
-//			if (j == i)
-//				latentAtom.setValue(1.0)
-//			else
-//				latentAtom.setValue(0.0)
+			//			if (j == i)
+			//				latentAtom.setValue(1.0)
+			//			else
+			//				latentAtom.setValue(0.0)
 			latentAtom.setValue(rand.nextDouble());
-			
+
 			latentAtom.commitToDB()
 			j++;
 		}

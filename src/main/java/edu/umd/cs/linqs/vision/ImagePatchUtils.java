@@ -3,9 +3,11 @@ package edu.umd.cs.linqs.vision;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +16,7 @@ import edu.umd.cs.linqs.vision.PatchStructure.Patch;
 import edu.umd.cs.psl.database.Database;
 import edu.umd.cs.psl.database.DatabaseQuery;
 import edu.umd.cs.psl.database.ResultList;
+import edu.umd.cs.psl.model.argument.GroundTerm;
 import edu.umd.cs.psl.model.argument.UniqueID;
 import edu.umd.cs.psl.model.argument.Variable;
 import edu.umd.cs.psl.model.atom.Atom;
@@ -21,6 +24,7 @@ import edu.umd.cs.psl.model.atom.GroundAtom;
 import edu.umd.cs.psl.model.atom.QueryAtom;
 import edu.umd.cs.psl.model.atom.RandomVariableAtom;
 import edu.umd.cs.psl.model.predicate.Predicate;
+import edu.umd.cs.psl.util.database.Queries;
 
 public class ImagePatchUtils {
 
@@ -130,11 +134,21 @@ public class ImagePatchUtils {
 	 * @param image vectorized image
 	 * @param mask vectorized mask of which entries to set ground truth on. If null, all entries are entered
 	 */
-	public static void setObservedPixels(Predicate brightness, UniqueID imageID, Database data, PatchStructure hierarchy, int width, int height, double [] image, boolean [] mask) {
-		int k = 0;
+	public static void setObservedPixels(Predicate brightness, UniqueID imageID, Database data, int width, int height, int numMeans, double [] image, boolean [] mask) {
+		// compute the means using pixel values where mask[k] = true
+		double [] pixelValues = Arrays.copyOf(image, image.length);
+		Arrays.sort(pixelValues);
+		
+		double [] means = new double[numMeans];
+		for (int m = 0; m < numMeans; m++)
+			means[m] = Math.round((double) m / numMeans); // this is wrong
+		
+		// compute value of hasMean(imageID, pixel, mean) for each mean
+		k = 0;
 		for (int i = 0; i < width; i++) {
 			for (int j = 0; j < height; j++) {
 				if (mask == null || mask[k]) {
+					// old code
 					UniqueID pixel = data.getUniqueID(k);
 					RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(brightness, pixel, imageID);
 					Double value = (image[k] > 0.4) ? 1.0 : 0.0;
@@ -145,6 +159,58 @@ public class ImagePatchUtils {
 			}
 		}
 	}
+	
+	
+	/**
+	 * 
+	 * @param hasMean
+	 * @param mean
+	 * @param brightness
+	 * @param pic
+	 * @param data
+	 * @param width
+	 * @param height
+	 * @param numMeans
+	 */
+	public static void decodeBrightness(Predicate hasMean, Predicate mean, Predicate brightness, Predicate pic, Database data, int width, int height, int numMeans) {
+		Set<GroundAtom> picAtoms = Queries.getAllAtoms(data, pic);
+		ArrayList<GroundTerm> pics = new ArrayList<GroundTerm>();
+		for (GroundAtom atom : picAtoms) 
+			pics.add(atom.getArguments()[0]);
+		
+		for (GroundTerm imageID : pics) {
+			int k = 0;
+			
+			double [] means = new double[numMeans];
+			
+			for (int m = 0; m < numMeans; m++) {
+				UniqueID meanID = data.getUniqueID(m);
+				GroundAtom meanAtom = data.getAtom(mean, imageID, meanID);
+				means[m] = meanAtom.getValue();
+			}
+			
+			for (int i = 0; i < width; i++) {
+				for (int j = 0; j < height; j++) {
+					UniqueID pixelID = data.getUniqueID(k);
+					RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(brightness, pixelID, imageID);
+					double numer = 0;
+					double denom = 0;
+					
+					for (int m = 0; m < numMeans; m++) {
+						UniqueID meanID = data.getUniqueID(m);
+						GroundAtom hasMeanAtom = data.getAtom(hasMean, imageID, pixelID, meanID);
+						numer += hasMeanAtom.getValue() * means[m];
+						denom += hasMeanAtom.getValue();
+					}
+					
+					atom.setValue(numer / denom);
+					
+					k++;
+				}
+			}
+		}
+	}		
+	
 
 	public static void populatePixels(int width, int height, Predicate pixelBrightness, Database data, UniqueID imageID) {
 		int rv = 0;
