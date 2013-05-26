@@ -39,9 +39,9 @@ testLeft = true
 // train on randomly sampled pixels
 trainOnRandom = false
 // number of training faces
-numTraining = 2
+numTraining = 200
 // number of testing faces
-numTesting = 2
+numTesting = 50
 
 dataset = "olivetti"
 
@@ -104,7 +104,7 @@ m.add predicate: "pixelBrightness", types: [ArgumentType.UniqueID, ArgumentType.
 m.add predicate: "picture", types: [ArgumentType.UniqueID]
 m.add predicate: "pictureType", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 
-m.add PredicateConstraint.Functional , on : pictureType
+//m.add PredicateConstraint.Functional , on : pictureType
 
 def pictureTypes = new ArrayList<UniqueID>(numTypes)
 for (int i = 0; i < numTypes; i++)
@@ -125,9 +125,22 @@ for (Patch p : hierarchy.getPatches().values()) {
 
 	for (Term type : pictureTypes) {
 		m.add rule: (picture(pic) & pictureType(pic, type)) >> pixelBrightness(patch, pic), weight: initialWeight + scale*random.nextGaussian(), squared: sq
-		m.add rule: (picture(pic) & pictureType(pic, type)) >> ~pixelBrightness(patch, pic), weight: initialWeight + scale*random.nextGaussian(), squared: sq
+		
+		m.add rule: (picture(pic) & pixelBrightness(patch, pic)) >> pictureType(pic, type), weight: initialWeight + scale*random.nextGaussian(), squared: false
+	}
+	m.add rule: picture(pic) >> pixelBrightness(patch, pic), weight: initialWeight + scale*random.nextGaussian(), squared: sq
+	m.add rule: picture(pic) >> ~pixelBrightness(patch, pic), weight: initialWeight + scale*random.nextGaussian(), squared: sq
+}
+
+for (Term typeA : pictureTypes) {
+	for (Term typeB : pictureTypes) {
+		if (typeA != typeB)
+			m.add rule: pictureType(P, typeA) >> ~pictureType(P, typeB), weight: initialWeight, squared: false
 	}
 }
+
+m.add rule : ~(pixelBrightness(X,Y)), weight: initialWeight, squared: sq
+m.add rule : ~(pictureType(X,Y)), weight: initialWeight, squared: sq
 
 log.info("Model has {} weighted kernels", m.getKernels().size());
 
@@ -180,10 +193,11 @@ ArrayList<double []> trainImages = new ArrayList<double[]>()
 ArrayList<double []> testImages = new ArrayList<double[]>()
 
 for (int i = 0; i < images.size(); i++) {
-	if (i < numTraining)
+	if (i < numTraining) {
 		trainImages.add(images.get(i))
-	else if (i >= images.size() - numTesting)
+//	} else if (i >= images.size() - numTesting) {
 		testImages.add(images.get(i))
+	}
 }
 
 images.clear()
@@ -223,8 +237,8 @@ for (int i = 0; i < trainImages.size(); i++) {
 	ImagePatchUtils.setPixels(pixelBrightness, id, trainReadDB, hierarchy, width, height, trainImages.get(i), trainMask)
 	ImagePatchUtils.setPixels(pixelBrightness, id, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
 }
-populateLatentVariables(trainImages.size(), pictureType, pictureTypes, trainLatentDB)
-populateLatentVariables(trainImages.size(), pictureType, pictureTypes, trainWriteDB)
+populateLatentVariables(trainImages.size(), pictureType, pictureTypes, trainLatentDB, random)
+populateLatentVariables(trainImages.size(), pictureType, pictureTypes, trainWriteDB, random)
 
 trainLatentDB.close()
 trainWriteDB.close()
@@ -248,7 +262,7 @@ for (int i = 0; i < testImages.size(); i++) {
 	ImagePatchUtils.setPixels(pixelBrightness, id, testReadDB, hierarchy, width, height, testImages.get(i), mask)
 	ImagePatchUtils.setPixels(pixelBrightness, id, testLabelDB, hierarchy, width, height, testImages.get(i), negMask)
 }
-populateLatentVariables(testImages.size(), pictureType, pictureTypes, testWriteDB)
+populateLatentVariables(testImages.size(), pictureType, pictureTypes, testWriteDB, random)
 
 testWriteDB.close()
 testReadDB.close()
@@ -273,17 +287,9 @@ def labelToClose = [pixelBrightness, pictureType] as Set
  * Weight learning
  */
 
-numIterations = 5
+numIterations = 10
 
 for (int i = 0; i < numIterations; i++) {
-
-	log.info("Starting E-step, iteration {}", i)
-	// e-step: infers picture type
-	eStepDB = data.getDatabase(trainLatent, eStepToClose, trainObs, trainLabel)
-	MPEInference mpe = new MPEInference(m, eStepDB, config);
-	mpe.mpeInference();
-	mpe.close();
-	eStepDB.close();
 
 	log.info("Starting M-step, iteration {}", i)
 	// m-step: learns new weights
@@ -295,7 +301,13 @@ for (int i = 0; i < numIterations; i++) {
 	trainDB.close()
 	labelDB.close()
 
-
+	log.info("Starting E-step, iteration {}", i)
+	// e-step: infers picture type
+	eStepDB = data.getDatabase(trainLatent, eStepToClose, trainObs, trainLabel)
+	MPEInference mpe = new MPEInference(m, eStepDB, config);
+	mpe.mpeInference();
+	mpe.close();
+	eStepDB.close();
 }
 
 log.info("Starting inference on test set")
@@ -335,12 +347,13 @@ DataOutputter.outputModel("output/vision/latent/"+ dataset + "-" + expSetup + "-
 
 
 
-private void populateLatentVariables(int numImages, Predicate latentVariable, Iterable<UniqueID> latentStates, Database db) {
+private void populateLatentVariables(int numImages, Predicate latentVariable, Iterable<UniqueID> latentStates, Database db, Random rand) {
 	for (int i = 0; i < numImages; i++) {
 		UniqueID pic = db.getUniqueID(i)
 		for (UniqueID type : latentStates) {
 			RandomVariableAtom latentAtom = db.getAtom(latentVariable, pic, type)
 			//			System.out.println(latentAtom)
+			latentAtom.setValue(rand.nextDouble())
 			latentAtom.commitToDB()
 		}
 	}

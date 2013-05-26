@@ -6,7 +6,8 @@ width = 64;
 height = 64;
 
 patternPos =  '\{(.+?)\} \( PICTURE\(pictureVar\) & PICTURETYPE\(pictureVar, (.+?)\) \) >> PIXELBRIGHTNESS\((.+?),';
-patternNeg =  '\{(.+?)\} \( PICTURE\(pictureVar\) & PICTURETYPE\(pictureVar, (.+?)\) \) >> ~\( PIXELBRIGHTNESS\((.+?),';
+% patternNeg =  '\{(.+?)\} \( PICTURE\(pictureVar\) & PICTURETYPE\(pictureVar, (.+?)\) \) >> ~\( PIXELBRIGHTNESS\((.+?),';
+patternPrior =  '\{(.+?)\} PICTURE\(pictureVar\) >> ~\( PIXELBRIGHTNESS\((.+?),';
 
 fid = fopen(filename);
 while ~feof(fid)
@@ -15,37 +16,40 @@ while ~feof(fid)
     pos = true;
     
     tokens = regexp(line, patternPos, 'tokens');
-    if isempty(tokens)
-        tokens = regexp(line, patternNeg, 'tokens');
-        pos = false;
-    end
-    
-    if isempty(tokens) || length(tokens{1}) ~= 3
-        fprintf('Could not parse line\n%s\n', line);
-        continue;
-    end
-    tokens = tokens{1};
-    
-    weight = str2double(tokens{1});
-    group = str2double(tokens{2});
-    pixel = str2double(tokens{3});
-    
-    if pos
+    if ~isempty(tokens)
+        tokens = tokens{1};
+        weight = str2double(tokens{1});
+        group = str2double(tokens{2});
+        pixel = str2double(tokens{3});
         posWeight{group+1}(pixel+1) = weight;
     else
-        negWeight{group+1}(pixel+1) = weight;
+        tokens = regexp(line, patternPrior, 'tokens');
+        if ~isempty(tokens)
+            tokens = tokens{1};
+            weight = str2double(tokens{1});
+            pixel = str2double(tokens{2});
+            priorWeight(pixel+1) = weight;
+        end
     end
     
 end
 fclose(fid);
-
-bigImage = [];
+%%
+subplot(121);
+priorWeight = reshape(priorWeight, width, height);
+bigImage = priorWeight(:, 1:width/2);
 
 for i = 1:length(posWeight)
     posWeight{i} = reshape(posWeight{i}, width, height);
-    negWeight{i} = reshape(negWeight{i}, width, height);
-    bigImage = [bigImage; posWeight{i}; negWeight{i}];
+    bigImage = [bigImage; posWeight{i}(:, 1:width/2)];
 end
-%%
+
 imagesc(bigImage);
+colorbar
 axis image
+
+%%
+subplot(122);
+imagesc(posWeight{1} - posWeight{2})
+axis image;
+colorbar
