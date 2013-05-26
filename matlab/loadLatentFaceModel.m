@@ -35,6 +35,7 @@ while ~feof(fid)
 end
 fclose(fid);
 %%
+figure(2);
 subplot(121);
 priorWeight = reshape(priorWeight, width, height);
 bigImage = priorWeight(:, 1:width/2);

@@ -118,6 +118,33 @@ public class ImagePatchUtils {
 			}
 		}
 	}
+	
+	/**
+	 * Assumes image is columnwise vectorized matrix of grayscale values in [0,1]
+	 * @param brightness predicate of brightness
+	 * @param imageID UniqueID of current image
+	 * @param data database to insert pixel values
+	 * @param hierarchy 
+	 * @param width width of image
+	 * @param height height of image
+	 * @param image vectorized image
+	 * @param mask vectorized mask of which entries to set ground truth on. If null, all entries are entered
+	 */
+	public static void setObservedPixels(Predicate brightness, UniqueID imageID, Database data, PatchStructure hierarchy, int width, int height, double [] image, boolean [] mask) {
+		int k = 0;
+		for (int i = 0; i < width; i++) {
+			for (int j = 0; j < height; j++) {
+				if (mask == null || mask[k]) {
+					UniqueID pixel = data.getUniqueID(k);
+					RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(brightness, pixel, imageID);
+					Double value = (image[k] > 0.4) ? 1.0 : 0.0;
+					atom.setValue(value);
+					data.commit(atom);		
+				}
+				k++;
+			}
+		}
+	}
 
 	public static void populatePixels(int width, int height, Predicate pixelBrightness, Database data, UniqueID imageID) {
 		int rv = 0;

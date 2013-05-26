@@ -39,9 +39,9 @@ testLeft = true
 // train on randomly sampled pixels
 trainOnRandom = false
 // number of training faces
-numTraining = 200
+numTraining = 3
 // number of testing faces
-numTesting = 50
+numTesting = 3
 
 dataset = "olivetti"
 
@@ -84,7 +84,7 @@ PSLModel m = new PSLModel(this, data)
  * DEFINE MODEL
  */
 
-numTypes = 2
+numTypes = 3
 
 width = 64
 height = 64
@@ -124,23 +124,20 @@ for (Patch p : hierarchy.getPatches().values()) {
 	args[1] = pic
 
 	for (Term type : pictureTypes) {
-		m.add rule: (picture(pic) & pictureType(pic, type)) >> pixelBrightness(patch, pic), weight: initialWeight + scale*random.nextGaussian(), squared: sq
+		m.add rule: (picture(pic) & pictureType(pic, type)) >> pixelBrightness(patch, pic), weight: initialWeight, squared: sq
+		m.add rule: (picture(pic) & pictureType(pic, type)) >> ~pixelBrightness(patch, pic), weight: initialWeight, squared: sq
 		
-		m.add rule: (picture(pic) & pixelBrightness(patch, pic)) >> pictureType(pic, type), weight: initialWeight + scale*random.nextGaussian(), squared: false
+		m.add rule: (picture(pic) & pixelBrightness(patch, pic)) >> pictureType(pic, type), weight: initialWeight, squared: false
+		m.add rule: (picture(pic) & ~pixelBrightness(patch, pic)) >> pictureType(pic, type), weight: initialWeight, squared: false
+		m.add rule: (picture(pic) & pixelBrightness(patch, pic)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
+		m.add rule: (picture(pic) & ~pixelBrightness(patch, pic)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
 	}
-	m.add rule: picture(pic) >> pixelBrightness(patch, pic), weight: initialWeight + scale*random.nextGaussian(), squared: sq
-	m.add rule: picture(pic) >> ~pixelBrightness(patch, pic), weight: initialWeight + scale*random.nextGaussian(), squared: sq
+	m.add rule: picture(pic) >> pixelBrightness(patch, pic), weight: initialWeight, squared: sq
+	m.add rule: picture(pic) >> ~pixelBrightness(patch, pic), weight: initialWeight, squared: sq
 }
 
-for (Term typeA : pictureTypes) {
-	for (Term typeB : pictureTypes) {
-		if (typeA != typeB)
-			m.add rule: pictureType(P, typeA) >> ~pictureType(P, typeB), weight: initialWeight, squared: false
-	}
-}
-
-m.add rule : ~(pixelBrightness(X,Y)), weight: initialWeight, squared: sq
-m.add rule : ~(pictureType(X,Y)), weight: initialWeight, squared: sq
+//m.add rule : ~(pixelBrightness(X,Y)), weight: initialWeight, squared: sq
+//m.add rule : ~(pictureType(X,Y)), weight: initialWeight, squared: sq
 
 log.info("Model has {} weighted kernels", m.getKernels().size());
 
@@ -195,7 +192,7 @@ ArrayList<double []> testImages = new ArrayList<double[]>()
 for (int i = 0; i < images.size(); i++) {
 	if (i < numTraining) {
 		trainImages.add(images.get(i))
-//	} else if (i >= images.size() - numTesting) {
+		//	} else if (i >= images.size() - numTesting) {
 		testImages.add(images.get(i))
 	}
 }
@@ -234,7 +231,7 @@ for (int i = 0; i < trainImages.size(); i++) {
 	}
 
 	UniqueID id = data.getUniqueID(i)
-	ImagePatchUtils.setPixels(pixelBrightness, id, trainReadDB, hierarchy, width, height, trainImages.get(i), trainMask)
+	ImagePatchUtils.setObservedPixels(pixelBrightness, id, trainReadDB, hierarchy, width, height, trainImages.get(i), trainMask)
 	ImagePatchUtils.setPixels(pixelBrightness, id, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
 }
 populateLatentVariables(trainImages.size(), pictureType, pictureTypes, trainLatentDB, random)
@@ -259,7 +256,7 @@ def testLabelDB = data.getDatabase(testLabel)
 def testWriteDB = data.getDatabase(testWrite)
 for (int i = 0; i < testImages.size(); i++) {
 	def id = data.getUniqueID(i)
-	ImagePatchUtils.setPixels(pixelBrightness, id, testReadDB, hierarchy, width, height, testImages.get(i), mask)
+	ImagePatchUtils.setObservedPixels(pixelBrightness, id, testReadDB, hierarchy, width, height, testImages.get(i), mask)
 	ImagePatchUtils.setPixels(pixelBrightness, id, testLabelDB, hierarchy, width, height, testImages.get(i), negMask)
 }
 populateLatentVariables(testImages.size(), pictureType, pictureTypes, testWriteDB, random)
@@ -350,11 +347,17 @@ DataOutputter.outputModel("output/vision/latent/"+ dataset + "-" + expSetup + "-
 private void populateLatentVariables(int numImages, Predicate latentVariable, Iterable<UniqueID> latentStates, Database db, Random rand) {
 	for (int i = 0; i < numImages; i++) {
 		UniqueID pic = db.getUniqueID(i)
+		int j = 0;
 		for (UniqueID type : latentStates) {
 			RandomVariableAtom latentAtom = db.getAtom(latentVariable, pic, type)
-			//			System.out.println(latentAtom)
-			latentAtom.setValue(rand.nextDouble())
+//			if (j == i)
+//				latentAtom.setValue(1.0)
+//			else
+//				latentAtom.setValue(0.0)
+			latentAtom.setValue(rand.nextDouble());
+			
 			latentAtom.commitToDB()
+			j++;
 		}
 	}
 }
