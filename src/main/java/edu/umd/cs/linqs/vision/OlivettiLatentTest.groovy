@@ -123,16 +123,16 @@ for (Patch p : hierarchy.getPatches().values()) {
 		for (int j = 0; j < numTypes; j++) {
 			UniqueID type = data.getUniqueID(j)
 
-			m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(patch, pic, mean), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(patch, pic, mean), weight: initialWeight, squared: sq
+			m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
+			m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
 
-			m.add rule: (picture(pic) & hasMean(patch, pic, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
-			m.add rule: (picture(pic) & ~hasMean(patch, pic, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
-			m.add rule: (picture(pic) & hasMean(patch, pic, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
-			m.add rule: (picture(pic) & ~hasMean(patch, pic, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
+			m.add rule: (picture(pic) & hasMean(pic, patch, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
+			m.add rule: (picture(pic) & ~hasMean(pic, patch, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
+			m.add rule: (picture(pic) & hasMean(pic, patch, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
+			m.add rule: (picture(pic) & ~hasMean(pic, patch, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
 		}
-		m.add rule: picture(pic) >> hasMean(patch, pic, mean), weight: initialWeight, squared: sq
-		m.add rule: picture(pic) >> ~hasMean(patch, pic, mean), weight: initialWeight, squared: sq
+		m.add rule: picture(pic) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
+		m.add rule: picture(pic) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
 	}
 }
 
@@ -271,9 +271,9 @@ testDB.close()
 
 /** set up predicate sets **/
 
-def eStepToClose = [picture, pixelBrightness] as Set
+def eStepToClose = [picture, hasMean, pixelBrightness] as Set
 def mStepToClose = [picture] as Set
-def labelToClose = [pixelBrightness, pictureType] as Set
+def labelToClose = [pixelBrightness, hasMean, pictureType] as Set
 
 /*
  * Weight learning
@@ -343,15 +343,11 @@ DataOutputter.outputModel("output/vision/latent/"+ dataset + "-" + expSetup + "-
 private void populateLatentVariables(int numImages, Predicate latentVariable, int numTypes, Database db, Random rand) {
 	for (int i = 0; i < numImages; i++) {
 		UniqueID pic = db.getUniqueID(i)
-		int j = 0;
 		for (j = 0; j < numTypes; j++) {
 			UniqueID typeID = db.getUniqueID(j);
 			RandomVariableAtom latentAtom = db.getAtom(latentVariable, pic, typeID)
-
 			latentAtom.setValue(rand.nextDouble());
-
-			latentAtom.commitToDB()
-			j++;
+			latentAtom.commitToDB();
 		}
 	}
 }

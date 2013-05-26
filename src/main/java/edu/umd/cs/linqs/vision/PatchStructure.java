@@ -308,6 +308,7 @@ public class PatchStructure {
 			this.patchHeight = myHeight;
 			this.imageHeight = height;
 			this.imageWidth = width;
+			string = locationID(startx, starty, level);
 		}
 		public Patch(double startx, double starty, int level, double myWidth, double myHeight, double height, double width) {
 			this.startx = startx;
