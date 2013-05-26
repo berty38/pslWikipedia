@@ -124,8 +124,12 @@ public class ImagePatchUtils {
 	}
 	
 	/**
-	 * Assumes image is columnwise vectorized matrix of grayscale values in [0,1]
-	 * @param brightness predicate of brightness
+	 * Sets k-means representation of observed image.
+	 * 
+	 * Assumes image is columnwise vectorized matrix of grayscale values in [0,1].
+	 * 
+	 * @param hasMean predicate of k-means representation
+	 * @param mean predicate used to store means for image
 	 * @param imageID UniqueID of current image
 	 * @param data database to insert pixel values
 	 * @param hierarchy 
@@ -134,32 +138,84 @@ public class ImagePatchUtils {
 	 * @param image vectorized image
 	 * @param mask vectorized mask of which entries to set ground truth on. If null, all entries are entered
 	 */
-	public static void setObservedPixels(Predicate brightness, UniqueID imageID, Database data, int width, int height, int numMeans, double [] image, boolean [] mask) {
-		// compute the means using pixel values where mask[k] = true
-		double [] pixelValues = Arrays.copyOf(image, image.length);
-		Arrays.sort(pixelValues);
+	public static void setObservedHasMean(Predicate hasMean, Predicate mean, UniqueID imageID, Database data, int width, int height, int numMeans, double variance, double [] image, boolean [] mask) {
+		/* Counts the number of observed pixels in the image */
+		int numObservedPixels = 0;
+		for (boolean masked : mask)
+			if (masked)
+				numObservedPixels++;
 		
+		/* Puts the observed pixels into their own array */
+		double[] observedImage = new double[numObservedPixels];
+		int j = 0;
+		for (int i = 0; i < image.length; i++)
+			if (mask[i])
+				observedImage[j++] = image[i];
+		
+		/* Sorts the pixel intensities */
+		Arrays.sort(observedImage);
+		
+		/* For each mean, identifies the quantiles, then computes the quantile's mean */
 		double [] means = new double[numMeans];
-		for (int m = 0; m < numMeans; m++)
-			means[m] = Math.round((double) m / numMeans); // this is wrong
+		double total;
+		int currentIndex = 0;
+		int numInThisQuantile;
+		for (int m = 0; m < numMeans; m++) {
+			total = 0.0;
+			numInThisQuantile = 0;
+			// TODO: Double check this stopping criterion
+			while ((double) (m+1) / numMeans * numObservedPixels < currentIndex) {
+				total += observedImage[currentIndex];
+				currentIndex++;
+				numInThisQuantile++;
+			}
+			means[m] = total / numInThisQuantile;
+		}
 		
-		// compute value of hasMean(imageID, pixel, mean) for each mean
-		k = 0;
+		/* Computes value of hasMean(imageID, pixel, mean) for each pixel and mean */
+		int k = 0;
 		for (int i = 0; i < width; i++) {
-			for (int j = 0; j < height; j++) {
+			for (j = 0; j < height; j++) {
 				if (mask == null || mask[k]) {
-					// old code
+					/* Populates HasMean with the k-means representation */
 					UniqueID pixel = data.getUniqueID(k);
-					RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(brightness, pixel, imageID);
-					Double value = (image[k] > 0.4) ? 1.0 : 0.0;
-					atom.setValue(value);
-					data.commit(atom);		
+					double[] hasMeanValues = computeHasMean(image[k], means, variance);
+					for (int m = 0; m < numMeans; m++) {
+						UniqueID meanID = data.getUniqueID(m);
+						RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(mean, pixel, imageID, meanID);
+						atom.setValue(hasMeanValues[m]);
+						data.commit(atom);
+					}
 				}
 				k++;
 			}
 		}
+		
+		/* Finally, stores the means */
+		for (int m = 0; m < numMeans; m++) {
+			UniqueID meanID = data.getUniqueID(m);
+			RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(mean, imageID, meanID);
+			atom.setValue(means[m]);
+			data.commit(atom);
+		}
 	}
 	
+	static double[] computeHasMean(double brightness, double[] means, double variance) {
+		double[] densities = new double[means.length];
+		for (int m = 0; m < means.length; m++) {
+			densities[m] = Math.exp(-1 * (brightness - means[m]) * (brightness - means[m]) / 2 / variance);
+			densities[m] /= Math.sqrt(2 * Math.PI * variance);
+		}
+		
+		double total = 0.0;
+		for (double density : densities)
+			total += density;
+		
+		for (int m = 0; m < means.length; m++)
+			densities[m] /= total;
+		
+		return densities;
+	}
 	
 	/**
 	 * 
