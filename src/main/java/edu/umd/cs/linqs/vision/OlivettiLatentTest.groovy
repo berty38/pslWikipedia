@@ -41,7 +41,7 @@ trainOnRandom = false
 // number of training faces
 numTraining = 5
 // number of testing faces
-numTesting = 50
+numTesting = 5
 
 dataset = "olivetti"
 
@@ -206,34 +206,25 @@ Random rand = new Random(0)
 
 /** load images into base pixels **/
 def trainReadDB = data.getDatabase(trainObs)
-def trainLabelDB = data.getDatabase(trainLabel)
 def trainWriteDB = data.getDatabase(trainWrite)
 def trainLatentDB = data.getDatabase(trainLatent)
 for (int i = 0; i < trainImages.size(); i++) {
-
-	if (trainOnRandom) {
-		c = 0
-		for (int x = 0; x < width; x++) {
-			for (int y = 0; y < height; y++) {
-				trainMask[c] = rand.nextBoolean()
-				negTrainMask[c] = !trainMask[c]
-				c++
-			}
-		}
-	}
-
 	UniqueID imageID = data.getUniqueID(i)
 	ImagePatchUtils.setObservedHasMean(hasMean, mean, imageID, trainReadDB, width, height, numMeans, variance, trainImages.get(i), trainMask)
 	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainReadDB, hierarchy, width, height, trainImages.get(i), trainMask)
-	ImagePatchUtils.setTargetHasMean(hasMean, mean, imageID, trainLabelDB, width, height, numMeans, variance, trainImages.get(i), negTrainMask)
-	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
 }
 populateLatentVariables(trainImages.size(), pictureType, numTypes, trainLatentDB, random)
 populateLatentVariables(trainImages.size(), pictureType, numTypes, trainWriteDB, random)
-
 trainLatentDB.close()
 trainWriteDB.close()
 trainReadDB.close()
+
+def trainLabelDB = data.getDatabase(trainLabel, trainObs)
+for (int i = 0; i < trainImages.size(); i++) {
+	UniqueID imageID = data.getUniqueID(i)
+	ImagePatchUtils.setTargetHasMean(hasMean, mean, imageID, trainLabelDB, width, height, numMeans, variance, trainImages.get(i), negTrainMask)
+	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
+}
 trainLabelDB.close()
 
 trainDB = data.getDatabase(trainWrite, trainObs)
