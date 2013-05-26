@@ -177,11 +177,11 @@ public class ImagePatchUtils {
 			for (j = 0; j < height; j++) {
 				if (mask == null || mask[k]) {
 					/* Populates HasMean with the k-means representation */
-					UniqueID pixel = data.getUniqueID(k);
+					UniqueID pixelID = data.getUniqueID(k);
 					double[] hasMeanValues = computeHasMean(image[k], means, variance);
 					for (int m = 0; m < numMeans; m++) {
 						UniqueID meanID = data.getUniqueID(m);
-						RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(mean, pixel, imageID, meanID);
+						RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(hasMean, imageID, pixelID, meanID);
 						atom.setValue(hasMeanValues[m]);
 						data.commit(atom);
 					}

@@ -228,8 +228,8 @@ for (int i = 0; i < trainImages.size(); i++) {
 	ImagePatchUtils.setObservedHasMean(hasMean, mean, imageID, trainLabelDB, width, height, numMeans, variance, trainImages.get(i), negTrainMask)
 	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
 }
-populateLatentVariables(trainImages.size(), pictureType, pictureTypes, trainLatentDB, random)
-populateLatentVariables(trainImages.size(), pictureType, pictureTypes, trainWriteDB, random)
+populateLatentVariables(trainImages.size(), pictureType, numTypes, trainLatentDB, random)
+populateLatentVariables(trainImages.size(), pictureType, numTypes, trainWriteDB, random)
 
 trainLatentDB.close()
 trainWriteDB.close()
@@ -254,7 +254,7 @@ for (int i = 0; i < testImages.size(); i++) {
 	ImagePatchUtils.setPixels(pixelBrightness, imageID, testReadDB, hierarchy, width, height, testImages.get(i), testMask)
 	ImagePatchUtils.setPixels(pixelBrightness, imageID, testLabelDB, hierarchy, width, height, testImages.get(i), negMask)
 }
-populateLatentVariables(testImages.size(), pictureType, pictureTypes, testWriteDB, random)
+populateLatentVariables(testImages.size(), pictureType, numTypes, testWriteDB, random)
 
 testWriteDB.close()
 testReadDB.close()
@@ -340,16 +340,14 @@ DataOutputter.outputModel("output/vision/latent/"+ dataset + "-" + expSetup + "-
 
 
 
-private void populateLatentVariables(int numImages, Predicate latentVariable, Iterable<UniqueID> latentStates, Database db, Random rand) {
+private void populateLatentVariables(int numImages, Predicate latentVariable, int numTypes, Database db, Random rand) {
 	for (int i = 0; i < numImages; i++) {
 		UniqueID pic = db.getUniqueID(i)
 		int j = 0;
-		for (UniqueID type : latentStates) {
-			RandomVariableAtom latentAtom = db.getAtom(latentVariable, pic, type)
-			//			if (j == i)
-			//				latentAtom.setValue(1.0)
-			//			else
-			//				latentAtom.setValue(0.0)
+		for (j = 0; j < numTypes; j++) {
+			UniqueID typeID = db.getUniqueID(j);
+			RandomVariableAtom latentAtom = db.getAtom(latentVariable, pic, typeID)
+
 			latentAtom.setValue(rand.nextDouble());
 
 			latentAtom.commitToDB()
