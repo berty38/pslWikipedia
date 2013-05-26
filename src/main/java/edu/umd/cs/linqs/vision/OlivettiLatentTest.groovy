@@ -8,6 +8,7 @@ import edu.umd.cs.linqs.wiki.DataOutputter
 import edu.umd.cs.psl.application.inference.MPEInference
 import edu.umd.cs.psl.application.learning.weight.WeightLearningApplication
 import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxLikelihoodMPE
+import edu.umd.cs.psl.application.learning.weight.maxlikelihood.MaxPseudoLikelihood
 import edu.umd.cs.psl.config.ConfigBundle
 import edu.umd.cs.psl.config.ConfigManager
 import edu.umd.cs.psl.database.DataStore
@@ -36,11 +37,11 @@ Logger log = LoggerFactory.getLogger(this.class)
 // test on left half of face (bottom if false)
 testLeft = true
 // train on randomly sampled pixels
-trainOnRandom = true
+trainOnRandom = false
 // number of training faces
-numTraining = 15
+numTraining = 2
 // number of testing faces
-numTesting = 50
+numTesting = 2
 
 dataset = "olivetti"
 
@@ -83,7 +84,7 @@ PSLModel m = new PSLModel(this, data)
  * DEFINE MODEL
  */
 
-numTypes = 5
+numTypes = 2
 
 width = 64
 height = 64
@@ -109,11 +110,11 @@ def pictureTypes = new ArrayList<UniqueID>(numTypes)
 for (int i = 0; i < numTypes; i++)
 	pictureTypes.add(data.getUniqueID(i))
 
-double initialWeight = 1.0
+double initialWeight = 5.0
 
 Random random = new Random(314159)
 
-scale = 0.01;
+scale = 0.5;
 
 for (Patch p : hierarchy.getPatches().values()) {
 	UniqueID patch = data.getUniqueID(p.uniqueID())
@@ -166,10 +167,10 @@ for (int x = 0; x < width; x++) {
 
 for (Partition part : [trainObs, testObs]) {
 	def readDB = data.getDatabase(part)
-//	ImagePatchUtils.insertFromPatchMap(north, readDB, hierarchy.getNorth())
-//	ImagePatchUtils.insertFromPatchMap(east, readDB, hierarchy.getEast())
-//	ImagePatchUtils.insertFromPatchMap(horizontalMirror, readDB, hierarchy.getMirrorHorizontal())
-//	ImagePatchUtils.insertFromPatchMap(verticalMirror, readDB, hierarchy.getMirrorVertical())
+	//	ImagePatchUtils.insertFromPatchMap(north, readDB, hierarchy.getNorth())
+	//	ImagePatchUtils.insertFromPatchMap(east, readDB, hierarchy.getEast())
+	//	ImagePatchUtils.insertFromPatchMap(horizontalMirror, readDB, hierarchy.getMirrorHorizontal())
+	//	ImagePatchUtils.insertFromPatchMap(verticalMirror, readDB, hierarchy.getMirrorVertical())
 	readDB.close()
 }
 
@@ -272,7 +273,7 @@ def labelToClose = [pixelBrightness, pictureType] as Set
  * Weight learning
  */
 
-numIterations = 1
+numIterations = 5
 
 for (int i = 0; i < numIterations; i++) {
 
@@ -283,7 +284,7 @@ for (int i = 0; i < numIterations; i++) {
 	mpe.mpeInference();
 	mpe.close();
 	eStepDB.close();
-	
+
 	log.info("Starting M-step, iteration {}", i)
 	// m-step: learns new weights
 	trainDB = data.getDatabase(trainWrite, mStepToClose, trainObs)
@@ -293,8 +294,8 @@ for (int i = 0; i < numIterations; i++) {
 	wl.close()
 	trainDB.close()
 	labelDB.close()
-	
-	
+
+
 }
 
 log.info("Starting inference on test set")
@@ -339,7 +340,7 @@ private void populateLatentVariables(int numImages, Predicate latentVariable, It
 		UniqueID pic = db.getUniqueID(i)
 		for (UniqueID type : latentStates) {
 			RandomVariableAtom latentAtom = db.getAtom(latentVariable, pic, type)
-//			System.out.println(latentAtom)
+			//			System.out.println(latentAtom)
 			latentAtom.commitToDB()
 		}
 	}
