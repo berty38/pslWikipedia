@@ -157,17 +157,16 @@ public class ImagePatchUtils {
 		
 		/* For each mean, identifies the quantiles, then computes the quantile's mean */
 		double [] means = new double[numMeans];
-		double total;
 		int currentIndex = 0;
-		int numInThisQuantile;
+		int numPerQuantile = numObservedPixels / numMeans;
+		int numWithPlusOne = numObservedPixels % numMeans; 
 		for (int m = 0; m < numMeans; m++) {
-			total = 0.0;
-			numInThisQuantile = 0;
-			// TODO: Double check this stopping criterion
-			while ((double) (m+1) / numMeans * numObservedPixels < currentIndex) {
-				total += observedImage[currentIndex];
-				currentIndex++;
-				numInThisQuantile++;
+			int numInThisQuantile = (m < numWithPlusOne) ? numPerQuantile + 1 : numPerQuantile;
+			int numProcessed = 0;
+			double total = 0.0;
+			while (numProcessed < numInThisQuantile && currentIndex < numObservedPixels) {
+				total += observedImage[currentIndex++];
+				numProcessed++;
 			}
 			means[m] = total / numInThisQuantile;
 		}
