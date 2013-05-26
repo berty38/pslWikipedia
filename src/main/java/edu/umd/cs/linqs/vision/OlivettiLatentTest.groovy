@@ -225,7 +225,7 @@ for (int i = 0; i < trainImages.size(); i++) {
 	UniqueID imageID = data.getUniqueID(i)
 	ImagePatchUtils.setObservedHasMean(hasMean, mean, imageID, trainReadDB, width, height, numMeans, variance, trainImages.get(i), trainMask)
 	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainReadDB, hierarchy, width, height, trainImages.get(i), trainMask)
-	ImagePatchUtils.setObservedHasMean(hasMean, mean, imageID, trainLabelDB, width, height, numMeans, variance, trainImages.get(i), negTrainMask)
+	ImagePatchUtils.setTargetHasMean(hasMean, mean, imageID, trainLabelDB, width, height, numMeans, variance, trainImages.get(i), negTrainMask)
 	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
 }
 populateLatentVariables(trainImages.size(), pictureType, numTypes, trainLatentDB, random)
