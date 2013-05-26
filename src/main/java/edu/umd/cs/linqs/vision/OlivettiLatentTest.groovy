@@ -85,36 +85,30 @@ PSLModel m = new PSLModel(this, data)
  */
 
 numTypes = 2
+numMeans = 4
 
 width = 64
 height = 64
 branching = 2
 depth = 7
+// branching and depth are now unused
 def hierarchy = new PatchStructure(width, height, branching, depth, config)
 hierarchy.generatePixels()
-//hierarchy.generateGridResolution(16)
 
 
-//m.add predicate: "north", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
-//m.add predicate: "east", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
-//m.add predicate: "horizontalMirror", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
-//m.add predicate: "verticalMirror", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
-//m.add predicate: "neighbors", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate: "mean", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
+m.add predicate: "hasMean", types: [ArgumentType.UniqueID, ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "pixelBrightness", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 m.add predicate: "picture", types: [ArgumentType.UniqueID]
 m.add predicate: "pictureType", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 
 //m.add PredicateConstraint.Functional , on : pictureType
 
-def pictureTypes = new ArrayList<UniqueID>(numTypes)
-for (int i = 0; i < numTypes; i++)
-	pictureTypes.add(data.getUniqueID(i))
-
 double initialWeight = 5.0
 
 Random random = new Random(314159)
 
-scale = 0.5;
+//scale = 0.5;
 
 for (Patch p : hierarchy.getPatches().values()) {
 	UniqueID patch = data.getUniqueID(p.uniqueID())
@@ -123,17 +117,22 @@ for (Patch p : hierarchy.getPatches().values()) {
 	args[0] = patch
 	args[1] = pic
 
-	for (Term type : pictureTypes) {
-		m.add rule: (picture(pic) & pictureType(pic, type)) >> pixelBrightness(patch, pic), weight: initialWeight, squared: sq
-		m.add rule: (picture(pic) & pictureType(pic, type)) >> ~pixelBrightness(patch, pic), weight: initialWeight, squared: sq
+	for (int i = 0; i < numMeans; i++) {
+		UniqueID mean = data.getUniqueID(i);
+		for (int j = 0; j < numTypes; j++) {
+			UniqueID type = data.getUniqueID(j)
 
-		m.add rule: (picture(pic) & pixelBrightness(patch, pic)) >> pictureType(pic, type), weight: initialWeight, squared: false
-		m.add rule: (picture(pic) & ~pixelBrightness(patch, pic)) >> pictureType(pic, type), weight: initialWeight, squared: false
-		m.add rule: (picture(pic) & pixelBrightness(patch, pic)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
-		m.add rule: (picture(pic) & ~pixelBrightness(patch, pic)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
+			m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(patch, pic, mean), weight: initialWeight, squared: sq
+			m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(patch, pic, mean), weight: initialWeight, squared: sq
+
+			m.add rule: (picture(pic) & hasMean(patch, pic, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
+			m.add rule: (picture(pic) & ~hasMean(patch, pic, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
+			m.add rule: (picture(pic) & hasMean(patch, pic, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
+			m.add rule: (picture(pic) & ~hasMean(patch, pic, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
+		}
+		m.add rule: picture(pic) >> hasMean(patch, pic, mean), weight: initialWeight, squared: sq
+		m.add rule: picture(pic) >> ~hasMean(patch, pic, mean), weight: initialWeight, squared: sq
 	}
-	m.add rule: picture(pic) >> pixelBrightness(patch, pic), weight: initialWeight, squared: sq
-	m.add rule: picture(pic) >> ~pixelBrightness(patch, pic), weight: initialWeight, squared: sq
 }
 
 //m.add rule : ~(pixelBrightness(X,Y)), weight: initialWeight, squared: sq
@@ -175,14 +174,6 @@ for (int x = 0; x < width; x++) {
 	}
 }
 
-for (Partition part : [trainObs, testObs]) {
-	def readDB = data.getDatabase(part)
-	//	ImagePatchUtils.insertFromPatchMap(north, readDB, hierarchy.getNorth())
-	//	ImagePatchUtils.insertFromPatchMap(east, readDB, hierarchy.getEast())
-	//	ImagePatchUtils.insertFromPatchMap(horizontalMirror, readDB, hierarchy.getMirrorHorizontal())
-	//	ImagePatchUtils.insertFromPatchMap(verticalMirror, readDB, hierarchy.getMirrorVertical())
-	readDB.close()
-}
 
 ArrayList<double []> images = ImagePatchUtils.loadImages(dataDir + "/" + dataset + "01.txt", width, height)
 // create list of train images and test images
@@ -201,13 +192,13 @@ images.clear()
 
 Inserter picInserter = data.getInserter(picture, trainObs)
 for (int i = 0; i < trainImages.size(); i++) {
-	UniqueID id = data.getUniqueID(i)
-	picInserter.insert(id)
+	UniqueID imageID = data.getUniqueID(i)
+	picInserter.insert(imageID)
 }
 picInserter = data.getInserter(picture, testObs)
 for (int i = 0; i < testImages.size(); i++) {
-	UniqueID id = data.getUniqueID(i)
-	picInserter.insert(id)
+	UniqueID imageID = data.getUniqueID(i)
+	picInserter.insert(imageID)
 }
 
 Random rand = new Random(0)
@@ -230,9 +221,11 @@ for (int i = 0; i < trainImages.size(); i++) {
 		}
 	}
 
-	UniqueID id = data.getUniqueID(i)
-	ImagePatchUtils.setObservedPixels(pixelBrightness, id, trainReadDB, hierarchy, width, height, trainImages.get(i), trainMask)
-	ImagePatchUtils.setPixels(pixelBrightness, id, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
+	UniqueID imageID = data.getUniqueID(i)
+	// TODO: Set hasMean of observed pixels
+	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainReadDB, hierarchy, width, height, trainImages.get(i), trainMask)
+	// TODO: Set hasMean of label pixels
+	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
 }
 populateLatentVariables(trainImages.size(), pictureType, pictureTypes, trainLatentDB, random)
 populateLatentVariables(trainImages.size(), pictureType, pictureTypes, trainWriteDB, random)
@@ -245,8 +238,9 @@ trainLabelDB.close()
 trainDB = data.getDatabase(trainWrite, trainObs)
 /** populate open variables **/
 for (int i = 0; i < trainImages.size(); i++) {
-	UniqueID id = data.getUniqueID(i)
-	ImagePatchUtils.populatePixels(width, height, pixelBrightness, trainDB, id)
+	UniqueID imageID = data.getUniqueID(i)
+	// TODO: populate hasMean of observed pixels
+	ImagePatchUtils.populateHasMean(width, height, numMeans, hasMean, trainDB, imageID)
 }
 trainDB.close()
 
@@ -256,7 +250,8 @@ def testLabelDB = data.getDatabase(testLabel)
 def testWriteDB = data.getDatabase(testWrite)
 for (int i = 0; i < testImages.size(); i++) {
 	def id = data.getUniqueID(i)
-	ImagePatchUtils.setObservedPixels(pixelBrightness, id, testReadDB, hierarchy, width, height, testImages.get(i), mask)
+	// TODO: Set hasMean of observed pixels
+	ImagePatchUtils.setPixels(pixelBrightness, id, testReadDB, hierarchy, width, height, testImages.get(i), mask)
 	ImagePatchUtils.setPixels(pixelBrightness, id, testLabelDB, hierarchy, width, height, testImages.get(i), negMask)
 }
 populateLatentVariables(testImages.size(), pictureType, pictureTypes, testWriteDB, random)
@@ -315,6 +310,7 @@ def testDB = data.getDatabase(testWrite, mStepToClose, testObs)
 MPEInference mpe = new MPEInference(m, testDB, config)
 FullInferenceResult result = mpe.mpeInference()
 
+ImagePatchUtils.decodeBrightness(hasMean, mean, pixelBrightness, picture, testDB, width, height, numMeans)
 
 DataOutputter.outputPredicate("output/vision/latent/"+ dataset + "-" + expSetup + ".txt" , testDB, pixelBrightness, ",", true, "index,image")
 testDB.close()
