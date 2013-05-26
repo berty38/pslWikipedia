@@ -171,7 +171,7 @@ public class ImagePatchUtils {
 			means[m] = total / numInThisQuantile;
 		}
 		
-		/* Computes value of hasMean(imageID, pixel, mean) for each pixel and mean */
+		/* Computes and stores value of hasMean(imageID, pixel, mean) for each pixel and mean */
 		int k = 0;
 		for (int i = 0; i < width; i++) {
 			for (j = 0; j < height; j++) {
@@ -199,7 +199,38 @@ public class ImagePatchUtils {
 		}
 	}
 	
-	static double[] computeHasMean(double brightness, double[] means, double variance) {
+	public static void setTargetHasMean(Predicate hasMean, Predicate mean, UniqueID imageID, Database data, int width, int height, int numMeans, double variance, double [] image, boolean [] mask) {
+		double [] means = new double[numMeans];
+		
+		/* Loads means for this image from the Database */
+		for (int m = 0; m < numMeans; m++) {
+			UniqueID meanID = data.getUniqueID(m);
+			GroundAtom meanAtom = data.getAtom(mean, imageID, meanID);
+			means[m] = meanAtom.getValue();
+		}
+		
+		/* Computes and stores value of hasMean(imageID, pixel, mean) for each pixel and mean */
+		int k = 0;
+		for (int i = 0; i < width; i++) {
+			for (int j = 0; j < height; j++) {
+				if (mask[k]) {
+					/* Populates HasMean with the k-means representation */
+					UniqueID pixelID = data.getUniqueID(k);
+					double[] hasMeanValues = computeHasMean(image[k], means, variance);
+					for (int m = 0; m < numMeans; m++) {
+						UniqueID meanID = data.getUniqueID(m);
+						RandomVariableAtom hasMeanAtom = (RandomVariableAtom) data.getAtom(hasMean, imageID, pixelID, meanID);
+						hasMeanAtom.setValue(hasMeanValues[m]);
+						data.commit(hasMeanAtom);
+					}
+					
+					k++;
+				}
+			}
+		}
+	}
+	
+	public static double[] computeHasMean(double brightness, double[] means, double variance) {
 		double[] densities = new double[means.length];
 		for (int m = 0; m < means.length; m++) {
 			densities[m] = Math.exp(-1 * (brightness - means[m]) * (brightness - means[m]) / 2 / variance);
