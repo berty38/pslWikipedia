@@ -335,7 +335,7 @@ public class ImagePatchUtils {
 		for (int i = 0; i < width; i++) {
 			for (int j = 0; j < height; j++) {
 				UniqueID pixel = data.getUniqueID(k);
-				Atom atom = data.getAtom(pixelBrightness, pixel, imageID);
+				Atom atom = data.getAtom(pixelBrightness, imageID, pixel);
 				if (atom instanceof RandomVariableAtom) {
 					((RandomVariableAtom) atom).setValue(0.0);
 					data.commit((RandomVariableAtom) atom);		

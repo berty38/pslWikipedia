@@ -39,9 +39,9 @@ testLeft = true
 // train on randomly sampled pixels
 trainOnRandom = false
 // number of training faces
-numTraining = 1
+numTraining = 2
 // number of testing faces
-numTesting = 1
+numTesting = 2
 
 dataset = "olivetti"
 
@@ -84,9 +84,9 @@ PSLModel m = new PSLModel(this, data)
  * DEFINE MODEL
  */
 
-numTypes = 1
+numTypes = 2
 numMeans = 4
-variance = 0.1
+variance = 0.004
 
 width = 64
 height = 64
@@ -125,11 +125,18 @@ for (Patch p : hierarchy.getPatches().values()) {
 
 			m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
 			m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
+			m.add rule: (picture(pic) & ~(pictureType(pic, type))) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
+			m.add rule: (picture(pic) & ~(pictureType(pic, type))) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
+			
+			m.add rule: (picture(pic) & pictureType(pic, type)) >> pixelbrightness(pic, patch), weight: initialWeight, squared: sq
+			m.add rule: (picture(pic) & pictureType(pic, type)) >> ~pixelbrightness(pic, patch), weight: initialWeight, squared: sq
+			m.add rule: (picture(pic) & ~(pictureType(pic, type))) >> pixelbrightness(pic, patch), weight: initialWeight, squared: sq
+			m.add rule: (picture(pic) & ~(pictureType(pic, type))) >> ~pixelbrightness(pic, patch), weight: initialWeight, squared: sq
 
-			m.add rule: (picture(pic) & hasMean(pic, patch, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
-			m.add rule: (picture(pic) & ~hasMean(pic, patch, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
-			m.add rule: (picture(pic) & hasMean(pic, patch, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
-			m.add rule: (picture(pic) & ~hasMean(pic, patch, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
+//			m.add rule: (picture(pic) & hasMean(pic, patch, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
+//			m.add rule: (picture(pic) & ~hasMean(pic, patch, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
+//			m.add rule: (picture(pic) & hasMean(pic, patch, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
+//			m.add rule: (picture(pic) & ~hasMean(pic, patch, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
 		}
 		m.add rule: picture(pic) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
 		m.add rule: picture(pic) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
@@ -184,7 +191,7 @@ ArrayList<double []> testImages = new ArrayList<double[]>()
 for (int i = 0; i < images.size(); i++) {
 	if (i < numTraining) {
 		trainImages.add(images.get(i))
-	} else if (i >= images.size() - numTesting) {
+	//} else if (i >= images.size() - numTesting) {
 		testImages.add(images.get(i))
 	}
 }
@@ -232,6 +239,7 @@ trainDB = data.getDatabase(trainWrite, trainObs)
 for (int i = 0; i < trainImages.size(); i++) {
 	UniqueID imageID = data.getUniqueID(i)
 	ImagePatchUtils.populateHasMean(width, height, numMeans, hasMean, trainDB, imageID)
+	ImagePatchUtils.populatePixels(width, height, pixelbrightness, trainDB, imageID);
 }
 trainDB.close()
 
@@ -257,20 +265,21 @@ testDB = data.getDatabase(testWrite, testObs)
 for (int i = 0; i < testImages.size(); i++) {
 	UniqueID imageID = data.getUniqueID(i)
 	ImagePatchUtils.populateHasMean(width, height, numMeans, hasMean, testDB, imageID)
+	ImagePatchUtils.populatePixels(width, height, pixelbrightness, testDB, imageID);
 }
 testDB.close()
 
 /** set up predicate sets **/
 
 def eStepToClose = [picture, hasMean, pixelBrightness] as Set
-def mStepToClose = [picture] as Set
+def mStepToClose = [picture, hasMean] as Set
 def labelToClose = [pixelBrightness, hasMean, pictureType] as Set
 
 /*
  * Weight learning
  */
 
-numIterations = 1
+numIterations = 3
 
 for (int i = 0; i < numIterations; i++) {
 
@@ -301,7 +310,7 @@ def testDB = data.getDatabase(testWrite, mStepToClose, testObs)
 MPEInference mpe = new MPEInference(m, testDB, config)
 FullInferenceResult result = mpe.mpeInference()
 
-ImagePatchUtils.decodeBrightness(hasMean, mean, pixelBrightness, picture, testDB, width, height, numMeans)
+//ImagePatchUtils.decodeBrightness(hasMean, mean, pixelBrightness, picture, testDB, width, height, numMeans)
 
 DataOutputter.outputPredicate("output/vision/latent/"+ dataset + "-" + expSetup + ".txt" , testDB, pixelBrightness, ",", true, "index,image")
 testDB.close()
