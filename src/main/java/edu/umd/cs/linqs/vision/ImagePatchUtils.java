@@ -158,9 +158,9 @@ public class ImagePatchUtils {
 		/* For each mean, identifies the quantiles, then computes the quantile's mean */
 		double [] means = new double[numMeans];
 		int currentIndex = 0;
-		int numPerQuantile = numObservedPixels / numMeans;
-		int numWithPlusOne = numObservedPixels % numMeans; 
-		for (int m = 0; m < numMeans; m++) {
+		int numPerQuantile = numObservedPixels / (numMeans-2);
+		int numWithPlusOne = numObservedPixels % (numMeans-2); 
+		for (int m = 1; m < numMeans - 1; m++) {
 			int numInThisQuantile = (m < numWithPlusOne) ? numPerQuantile + 1 : numPerQuantile;
 			int numProcessed = 0;
 			double total = 0.0;
@@ -170,7 +170,8 @@ public class ImagePatchUtils {
 			}
 			means[m] = total / numInThisQuantile;
 		}
-
+		means[means.length-1] = 1.0;
+		
 		/* Computes and stores value of hasMean(imageID, pixel, mean) for each pixel and mean */
 		int k = 0;
 		for (int i = 0; i < width; i++) {
