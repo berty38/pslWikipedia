@@ -36,7 +36,7 @@ for file = 1:length(files)
     for i = 1:rows
         for j = 1:cols
             bigImage((i-1)*width + 1 : i * width, (j-1) * width + 1 : j * width) = reshape(X(k,:), width, width);
-            bigImage((i-1)*width + 1 : i * width, (j-1) * width + 1 + width/2: j * width) = 0;
+%             bigImage((i-1)*width + 1 : i * width, (j-1) * width + 1 + width/2: j * width) = 0;
             k = k + 1;
             if (k > predCount)
                 break;

@@ -247,6 +247,7 @@ public class ImagePatchUtils {
 		for (int m = 0; m < means.length; m++)
 			densities[m] /= total;
 
+		// hacks to compute other representations
 		//		// make hard assignments
 		//		int i = 0;
 		//		for (int m = 0; m < means.length; m++) {
@@ -255,7 +256,11 @@ public class ImagePatchUtils {
 		//				i = m;
 		//		}
 		//		densities[i] = 1.0;
-
+		
+////		 use means as thresholds
+//		for (int m = 0; m < means.length; m++) 
+//			densities[m] = (brightness >= means[m])? 1.0 : 0.0;
+		
 		return densities;
 	}
 

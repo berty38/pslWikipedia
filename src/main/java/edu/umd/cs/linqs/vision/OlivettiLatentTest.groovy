@@ -3,6 +3,8 @@ package edu.umd.cs.linqs.vision
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
+import com.google.common.collect.Iterables;
+
 import edu.umd.cs.linqs.vision.PatchStructure.Patch
 import edu.umd.cs.linqs.wiki.DataOutputter
 import edu.umd.cs.psl.application.inference.MPEInference
@@ -27,6 +29,8 @@ import edu.umd.cs.psl.model.argument.UniqueID
 import edu.umd.cs.psl.model.argument.Variable
 import edu.umd.cs.psl.model.atom.Atom
 import edu.umd.cs.psl.model.atom.RandomVariableAtom
+import edu.umd.cs.psl.model.kernel.CompatibilityKernel;
+import edu.umd.cs.psl.model.parameters.PositiveWeight
 import edu.umd.cs.psl.model.predicate.Predicate
 import edu.umd.cs.psl.util.database.Queries
 
@@ -37,9 +41,9 @@ Logger log = LoggerFactory.getLogger(this.class)
 // test on left half of face (bottom if false)
 testLeft = true
 // number of training faces
-numTraining = 10
+numTraining = 30
 // number of testing faces
-numTesting = 10
+numTesting = 30
 
 dataset = "olivetti-small"
 
@@ -93,8 +97,8 @@ PSLModel m = new PSLModel(this, data)
  * DEFINE MODEL
  */
 
-numTypes = 10
-numMeans = 2
+numTypes = 5
+numMeans = 4
 variance = 0.004
 
 branching = 2
@@ -112,7 +116,7 @@ m.add predicate: "pictureType", types: [ArgumentType.UniqueID, ArgumentType.Uniq
 
 //m.add PredicateConstraint.Functional , on : pictureType
 
-double initialWeight = 5.0
+double initialWeight = 1.0
 
 Random random = new Random(314159)
 
@@ -133,11 +137,11 @@ for (Patch p : hierarchy.getPatches().values()) {
 			// if patch is in input set, add rules to reason about mean representation
 			for (int i = 0; i < numMeans; i++) {
 				UniqueID mean = data.getUniqueID(i);
-
-				m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
-				m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
-				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
-				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
+				
+				m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: false
+				m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: false
+				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: false
+				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: false
 			}
 		}
 		if (!mask[patchID]) {
@@ -180,7 +184,7 @@ ArrayList<double []> testImages = new ArrayList<double[]>()
 for (int i = 0; i < images.size(); i++) {
 	if (i < numTraining) {
 		trainImages.add(images.get(i))
-		//} else if (i >= images.size() - numTesting) {
+//	} else if (i >= images.size() - numTesting) {
 		testImages.add(images.get(i))
 	}
 }
@@ -271,7 +275,10 @@ def labelToClose = [pixelBrightness, hasMean, pictureType] as Set
 numIterations = 10
 
 for (int i = 0; i < numIterations; i++) {
-
+//	// initialize weights
+//	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
+//			k.setWeight(new PositiveWeight(initialWeight))
+	
 	log.info("Starting M-step, iteration {}", i)
 	// m-step: learns new weights
 	trainDB = data.getDatabase(trainWrite, mStepToClose, trainObs)
