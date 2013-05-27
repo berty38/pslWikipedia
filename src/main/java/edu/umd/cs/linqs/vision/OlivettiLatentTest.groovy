@@ -36,15 +36,15 @@ Logger log = LoggerFactory.getLogger(this.class)
 /* VISION EXPERIMENT SETTINGS */
 // test on left half of face (bottom if false)
 testLeft = true
-// train on randomly sampled pixels
-trainOnRandom = false
 // number of training faces
-numTraining = 2
+numTraining = 10
 // number of testing faces
-numTesting = 2
+numTesting = 10
 
-dataset = "olivetti"
+dataset = "olivetti-small"
 
+width = 32
+height = 32
 
 if (args.length >= 2) {
 	if (args[0] == "bottom") {
@@ -54,16 +54,25 @@ if (args.length >= 2) {
 		testLeft = true
 		log.info("Testing on left of face")
 	}
-	if (args[1] == "half") {
-		trainOnRandom = false
-		log.info("Training on given half of face")
-	} else {
-		trainOnRandom = true
-		log.info("Training on randomly held-out pixels")
-	}
 }
 
-def expSetup = (testLeft? "left" : "bottom") + "-" + (trainOnRandom? "rand" : "same")
+def expSetup = (testLeft? "left" : "bottom")
+
+// construct observed mask
+boolean[] mask = new boolean[width * height]
+boolean[] negMask = new boolean[width * height]
+int c = 0
+for (int x = 0; x < width; x++) {
+	for (int y = 0; y < height; y++) {
+		if (testLeft)
+			mask[c] = x >= (width / 2)
+		else
+			mask[c] = y <= height / 2
+
+		negMask[c] = !mask[c]
+		c++
+	}
+}
 
 ConfigManager cm = ConfigManager.getManager()
 ConfigBundle config = cm.getBundle("latentfaces")
@@ -84,12 +93,10 @@ PSLModel m = new PSLModel(this, data)
  * DEFINE MODEL
  */
 
-numTypes = 2
-numMeans = 4
+numTypes = 10
+numMeans = 2
 variance = 0.004
 
-width = 64
-height = 64
 branching = 2
 depth = 7
 // branching and depth are now unused
@@ -118,28 +125,32 @@ for (Patch p : hierarchy.getPatches().values()) {
 	args[0] = patch
 	args[1] = pic
 
-	for (int i = 0; i < numMeans; i++) {
-		UniqueID mean = data.getUniqueID(i);
-		for (int j = 0; j < numTypes; j++) {
-			UniqueID type = data.getUniqueID(j)
+	int patchID = patch.getInternalID() // this probably only works if we are only using pixel "patches"
 
-			m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & ~(pictureType(pic, type))) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & ~(pictureType(pic, type))) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
-			
+	for (int j = 0; j < numTypes; j++) {
+		UniqueID type = data.getUniqueID(j)
+		if (mask[patchID]) {
+			// if patch is in input set, add rules to reason about mean representation
+			for (int i = 0; i < numMeans; i++) {
+				UniqueID mean = data.getUniqueID(i);
+
+				m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
+				m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
+				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
+				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
+			}
+		}
+		if (!mask[patchID]) {
+			// if patch is in output set, add rules to infer pixel truth value from pictureType
 			m.add rule: (picture(pic) & pictureType(pic, type)) >> pixelbrightness(pic, patch), weight: initialWeight, squared: sq
 			m.add rule: (picture(pic) & pictureType(pic, type)) >> ~pixelbrightness(pic, patch), weight: initialWeight, squared: sq
 			m.add rule: (picture(pic) & ~(pictureType(pic, type))) >> pixelbrightness(pic, patch), weight: initialWeight, squared: sq
 			m.add rule: (picture(pic) & ~(pictureType(pic, type))) >> ~pixelbrightness(pic, patch), weight: initialWeight, squared: sq
-
-//			m.add rule: (picture(pic) & hasMean(pic, patch, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
-//			m.add rule: (picture(pic) & ~hasMean(pic, patch, mean)) >> pictureType(pic, type), weight: initialWeight, squared: false
-//			m.add rule: (picture(pic) & hasMean(pic, patch, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
-//			m.add rule: (picture(pic) & ~hasMean(pic, patch, mean)) >> ~pictureType(pic, type), weight: initialWeight, squared: false
 		}
-		m.add rule: picture(pic) >> hasMean(pic, patch, mean), weight: initialWeight, squared: sq
-		m.add rule: picture(pic) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: sq
+	}
+	if (!mask[patchID]) {
+		m.add rule: picture(pic) >> pixelBrightness(pic, patch), weight: initialWeight, squared: sq
+		m.add rule: picture(pic) >> ~pixelBrightness(pic, patch), weight: initialWeight, squared: sq
 	}
 }
 
@@ -161,28 +172,6 @@ Partition trainLatent = new Partition(6)
  */
 dataDir = "data/vision"
 
-// construct observed mask
-boolean[] testMask = new boolean[width * height]
-boolean[] negMask = new boolean[width * height]
-boolean[] trainMask = new boolean[width * height]
-boolean[] negTrainMask = new boolean[width * height]
-int c = 0
-for (int x = 0; x < width; x++) {
-	for (int y = 0; y < height; y++) {
-		if (testLeft)
-			testMask[c] = x >= (width / 2)
-		else
-			testMask[c] = y <= height / 2
-
-		negMask[c] = !testMask[c]
-
-		trainMask[c] = testMask[c]
-		negTrainMask[c] = negMask[c]
-		c++
-	}
-}
-
-
 ArrayList<double []> images = ImagePatchUtils.loadImages(dataDir + "/" + dataset + "01.txt", width, height)
 // create list of train images and test images
 ArrayList<double []> trainImages = new ArrayList<double[]>()
@@ -191,7 +180,7 @@ ArrayList<double []> testImages = new ArrayList<double[]>()
 for (int i = 0; i < images.size(); i++) {
 	if (i < numTraining) {
 		trainImages.add(images.get(i))
-	//} else if (i >= images.size() - numTesting) {
+		//} else if (i >= images.size() - numTesting) {
 		testImages.add(images.get(i))
 	}
 }
@@ -217,8 +206,8 @@ def trainWriteDB = data.getDatabase(trainWrite)
 def trainLatentDB = data.getDatabase(trainLatent)
 for (int i = 0; i < trainImages.size(); i++) {
 	UniqueID imageID = data.getUniqueID(i)
-	ImagePatchUtils.setObservedHasMean(hasMean, mean, imageID, trainReadDB, width, height, numMeans, variance, trainImages.get(i), trainMask)
-	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainReadDB, hierarchy, width, height, trainImages.get(i), trainMask)
+	ImagePatchUtils.setObservedHasMean(hasMean, mean, imageID, trainReadDB, width, height, numMeans, variance, trainImages.get(i), mask)
+	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainReadDB, hierarchy, width, height, trainImages.get(i), mask)
 }
 populateLatentVariables(trainImages.size(), pictureType, numTypes, trainLatentDB, random)
 populateLatentVariables(trainImages.size(), pictureType, numTypes, trainWriteDB, random)
@@ -229,8 +218,8 @@ trainReadDB.close()
 def trainLabelDB = data.getDatabase(trainLabel, trainObs)
 for (int i = 0; i < trainImages.size(); i++) {
 	UniqueID imageID = data.getUniqueID(i)
-	ImagePatchUtils.setTargetHasMean(hasMean, mean, imageID, trainLabelDB, width, height, numMeans, variance, trainImages.get(i), negTrainMask)
-	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainLabelDB, hierarchy, width, height, trainImages.get(i), negTrainMask)
+	ImagePatchUtils.setTargetHasMean(hasMean, mean, imageID, trainLabelDB, width, height, numMeans, variance, trainImages.get(i), negMask)
+	ImagePatchUtils.setPixels(pixelBrightness, imageID, trainLabelDB, hierarchy, width, height, trainImages.get(i), negMask)
 }
 trainLabelDB.close()
 
@@ -249,8 +238,8 @@ def testLabelDB = data.getDatabase(testLabel)
 def testWriteDB = data.getDatabase(testWrite)
 for (int i = 0; i < testImages.size(); i++) {
 	def imageID = data.getUniqueID(i)
-	ImagePatchUtils.setObservedHasMean(hasMean, mean, imageID, testReadDB, width, height, numMeans, variance, testImages.get(i), testMask)
-	ImagePatchUtils.setPixels(pixelBrightness, imageID, testReadDB, hierarchy, width, height, testImages.get(i), testMask)
+	ImagePatchUtils.setObservedHasMean(hasMean, mean, imageID, testReadDB, width, height, numMeans, variance, testImages.get(i), mask)
+	ImagePatchUtils.setPixels(pixelBrightness, imageID, testReadDB, hierarchy, width, height, testImages.get(i), mask)
 	ImagePatchUtils.setPixels(pixelBrightness, imageID, testLabelDB, hierarchy, width, height, testImages.get(i), negMask)
 }
 populateLatentVariables(testImages.size(), pictureType, numTypes, testWriteDB, random)
@@ -279,7 +268,7 @@ def labelToClose = [pixelBrightness, hasMean, pictureType] as Set
  * Weight learning
  */
 
-numIterations = 3
+numIterations = 10
 
 for (int i = 0; i < numIterations; i++) {
 
@@ -346,6 +335,7 @@ private void populateLatentVariables(int numImages, Predicate latentVariable, in
 		for (j = 0; j < numTypes; j++) {
 			UniqueID typeID = db.getUniqueID(j);
 			RandomVariableAtom latentAtom = db.getAtom(latentVariable, pic, typeID)
+			//			latentAtom.setValue((rand.nextBoolean())? 0.0 : 1.0);
 			latentAtom.setValue(rand.nextDouble());
 			latentAtom.commitToDB();
 		}

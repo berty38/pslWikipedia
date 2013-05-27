@@ -93,6 +93,7 @@ for task = 1:2
     finalImage{task} = [];
     for j = 1:length(finalInds{task})
         i = finalInds{task}(j);
+        t = (task-1)*2+1;
         row = [truth{t}{i} vpad psl{t}{i} vpad spn{t}{i} vpad psl{t+1}{i} vpad spn{t+1}{i}];
         finalImage{task} = [finalImage{task}; row; zeros(1, size(row,2))];
     end

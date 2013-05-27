@@ -1,7 +1,7 @@
 oDir = '~/Dropbox/Research/pslWikipedia/output/vision/latent/';
 
 files = {...
-    sprintf('%s/olivetti-left-same.txt', oDir)};
+    sprintf('%s/olivetti-small-left.txt', oDir)};
 
 
 
@@ -13,12 +13,12 @@ for file = 1:length(files)
     data = dlmread(files{file}, ',', 1, 0);
     
     %
-    n = max(data(:,2))+1;
-    m = max(data(:,1))+1;
+    n = max(data(:,1))+1;
+    m = max(data(:,2))+1;
     
     X = zeros(n, m);
     
-    X = X + sparse(data(:,2) + 1, data(:,1) + 1, data(:,3), n, m);
+    X = X + sparse(data(:,1) + 1, data(:,2) + 1, data(:,3), n, m);
         
     figure(file);
     clf;
@@ -36,7 +36,7 @@ for file = 1:length(files)
     for i = 1:rows
         for j = 1:cols
             bigImage((i-1)*width + 1 : i * width, (j-1) * width + 1 : j * width) = reshape(X(k,:), width, width);
-%             bigImage((i-1)*width + 1 : i * width, (j-1) * width + 1 + width/2: j * width) = 0;
+            bigImage((i-1)*width + 1 : i * width, (j-1) * width + 1 + width/2: j * width) = 0;
             k = k + 1;
             if (k > predCount)
                 break;

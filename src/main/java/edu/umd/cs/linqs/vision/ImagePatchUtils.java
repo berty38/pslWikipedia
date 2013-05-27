@@ -113,8 +113,8 @@ public class ImagePatchUtils {
 		for (int i = 0; i < width; i++) {
 			for (int j = 0; j < height; j++) {
 				if (mask == null || mask[k]) {
-					UniqueID pixel = data.getUniqueID(k);
-					RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(brightness, pixel, imageID);
+					UniqueID pixelID = data.getUniqueID(k);
+					RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(brightness, imageID, pixelID);
 					atom.setValue(image[k]);
 					data.commit(atom);		
 				}
@@ -157,21 +157,23 @@ public class ImagePatchUtils {
 
 		/* For each mean, identifies the quantiles, then computes the quantile's mean */
 		double [] means = new double[numMeans];
-		int currentIndex = 0;
-		int numPerQuantile = numObservedPixels / (numMeans-2);
-		int numWithPlusOne = numObservedPixels % (numMeans-2); 
-		for (int m = 1; m < numMeans - 1; m++) {
-			int numInThisQuantile = (m < numWithPlusOne) ? numPerQuantile + 1 : numPerQuantile;
-			int numProcessed = 0;
-			double total = 0.0;
-			while (numProcessed < numInThisQuantile && currentIndex < numObservedPixels) {
-				total += observedImage[currentIndex++];
-				numProcessed++;
+		if (numMeans > 2) {
+			int currentIndex = 0;
+			int numPerQuantile = numObservedPixels / (numMeans-2);
+			int numWithPlusOne = numObservedPixels % (numMeans-2); 
+			for (int m = 1; m < numMeans - 1; m++) {
+				int numInThisQuantile = (m < numWithPlusOne) ? numPerQuantile + 1 : numPerQuantile;
+				int numProcessed = 0;
+				double total = 0.0;
+				while (numProcessed < numInThisQuantile && currentIndex < numObservedPixels) {
+					total += observedImage[currentIndex++];
+					numProcessed++;
+				}
+				means[m] = total / numInThisQuantile;
 			}
-			means[m] = total / numInThisQuantile;
 		}
 		means[means.length-1] = 1.0;
-		
+
 		/* Computes and stores value of hasMean(imageID, pixel, mean) for each pixel and mean */
 		int k = 0;
 		for (int i = 0; i < width; i++) {
@@ -245,6 +247,15 @@ public class ImagePatchUtils {
 		for (int m = 0; m < means.length; m++)
 			densities[m] /= total;
 
+		//		// make hard assignments
+		//		int i = 0;
+		//		for (int m = 0; m < means.length; m++) {
+		//			densities[m] = 0;
+		//			if (Math.abs(brightness - means[m]) < Math.abs(brightness - means[i]))
+		//				i = m;
+		//		}
+		//		densities[i] = 1.0;
+
 		return densities;
 	}
 
@@ -305,7 +316,7 @@ public class ImagePatchUtils {
 			for (int i = 0; i < width; i++) {
 				for (int j = 0; j < height; j++) {
 					UniqueID pixelID = data.getUniqueID(k);
-					GroundAtom atom = data.getAtom(brightness, pixelID, imageID);
+					GroundAtom atom = data.getAtom(brightness, imageID, pixelID);
 					double numer = 0;
 					double denom = 0;
 
@@ -334,8 +345,8 @@ public class ImagePatchUtils {
 		int k = 0;
 		for (int i = 0; i < width; i++) {
 			for (int j = 0; j < height; j++) {
-				UniqueID pixel = data.getUniqueID(k);
-				Atom atom = data.getAtom(pixelBrightness, imageID, pixel);
+				UniqueID pixelID = data.getUniqueID(k);
+				Atom atom = data.getAtom(pixelBrightness, imageID, pixelID);
 				if (atom instanceof RandomVariableAtom) {
 					((RandomVariableAtom) atom).setValue(0.0);
 					data.commit((RandomVariableAtom) atom);		
@@ -359,8 +370,8 @@ public class ImagePatchUtils {
 	public static void populateAllPatches(Predicate brightness, UniqueID imageID, Database data, PatchStructure hierarchy) {
 		log.debug("Populating " + brightness + " on image " + imageID);
 		for (Patch p : hierarchy.getPatches().values()) {
-			UniqueID patch = data.getUniqueID(p.uniqueID());
-			Atom atom = data.getAtom(brightness, patch, imageID);
+			UniqueID patchID = data.getUniqueID(p.uniqueID());
+			Atom atom = data.getAtom(brightness, imageID, patchID);
 			if (atom instanceof RandomVariableAtom) {
 				data.commit((RandomVariableAtom) atom);
 			}
@@ -423,8 +434,8 @@ public class ImagePatchUtils {
 	public static void computePatchBrightness(Predicate brightness, Predicate pixelBrightness, Database data, UniqueID imageID, PatchStructure ps, double [] image) {
 		log.debug("Computing patch brightness for image {}", imageID);
 		for (Patch p : ps.getPatches().values()) {
-			UniqueID patch = data.getUniqueID(p.uniqueID());
-			RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(brightness, patch, imageID);
+			UniqueID patchID = data.getUniqueID(p.uniqueID());
+			RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(brightness, imageID, patchID);
 			double sum = 0.0;
 			for (Integer pixel : p.pixelList()) {
 				sum += image[pixel];
@@ -439,15 +450,15 @@ public class ImagePatchUtils {
 	public static void computeNeighborBrightness(Predicate neighborBrightness, Predicate brightness, Predicate neighbors, Database data, UniqueID imageID, PatchStructure ps) {
 		log.debug("Computing neighbor brightness for image {}", imageID);
 		for (Patch p : ps.getPatches().values()) {
-			UniqueID patch = data.getUniqueID(p.uniqueID());
-			RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(neighborBrightness, patch, imageID);
+			UniqueID patchID = data.getUniqueID(p.uniqueID());
+			RandomVariableAtom atom = (RandomVariableAtom) data.getAtom(neighborBrightness, imageID, patchID);
 			double sum = 0.0;
 			Variable neigh = new Variable("neighbor");
-			QueryAtom q = new QueryAtom(neighbors, patch, neigh);
+			QueryAtom q = new QueryAtom(neighbors, patchID, neigh);
 			ResultList list = data.executeQuery(new DatabaseQuery(q));
 			if (list.size() > 0) {
 				for (int i = 0; i < list.size(); i++) {
-					GroundAtom nb = data.getAtom(brightness, list.get(i)[0], imageID);
+					GroundAtom nb = data.getAtom(brightness, imageID, list.get(i)[0]);
 					sum += nb.getValue();
 				}
 				atom.setValue(sum / list.size());
