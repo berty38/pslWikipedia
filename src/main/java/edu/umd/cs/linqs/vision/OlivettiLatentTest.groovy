@@ -39,9 +39,9 @@ testLeft = true
 // train on randomly sampled pixels
 trainOnRandom = false
 // number of training faces
-numTraining = 5
+numTraining = 1
 // number of testing faces
-numTesting = 5
+numTesting = 1
 
 dataset = "olivetti"
 
@@ -84,7 +84,7 @@ PSLModel m = new PSLModel(this, data)
  * DEFINE MODEL
  */
 
-numTypes = 2
+numTypes = 1
 numMeans = 4
 variance = 0.1
 
@@ -270,7 +270,7 @@ def labelToClose = [pixelBrightness, hasMean, pictureType] as Set
  * Weight learning
  */
 
-numIterations = 10
+numIterations = 1
 
 for (int i = 0; i < numIterations; i++) {
 
