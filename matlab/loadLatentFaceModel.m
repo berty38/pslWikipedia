@@ -52,7 +52,7 @@ posPrior = reshape(posPrior, height, width/2);
 negPrior = reshape(negPrior, height, width/2);
 
 %%
-figure(2);
+figure(3);
 subplot(131);
 imagesc([posPrior; negPrior]);
 xlabel('Prior');

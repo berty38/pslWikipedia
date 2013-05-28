@@ -1,7 +1,9 @@
 oDir = '~/Dropbox/Research/pslWikipedia/output/vision/latent/';
 
 files = {...
-    sprintf('%s/olivetti-small-left.txt', oDir)};
+    sprintf('%s/olivetti-small-left.txt', oDir),...
+    sprintf('%s/olivetti-small-left-train.txt', oDir),...
+    };
 
 
 

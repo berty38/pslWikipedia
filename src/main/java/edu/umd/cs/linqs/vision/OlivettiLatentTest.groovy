@@ -41,9 +41,9 @@ Logger log = LoggerFactory.getLogger(this.class)
 // test on left half of face (bottom if false)
 testLeft = true
 // number of training faces
-numTraining = 30
+numTraining = 50
 // number of testing faces
-numTesting = 30
+numTesting = 50
 
 dataset = "olivetti-small"
 
@@ -137,7 +137,7 @@ for (Patch p : hierarchy.getPatches().values()) {
 			// if patch is in input set, add rules to reason about mean representation
 			for (int i = 0; i < numMeans; i++) {
 				UniqueID mean = data.getUniqueID(i);
-				
+
 				m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: false
 				m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: false
 				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: false
@@ -155,6 +155,15 @@ for (Patch p : hierarchy.getPatches().values()) {
 	if (!mask[patchID]) {
 		m.add rule: picture(pic) >> pixelBrightness(pic, patch), weight: initialWeight, squared: sq
 		m.add rule: picture(pic) >> ~pixelBrightness(pic, patch), weight: initialWeight, squared: sq
+	}
+}
+
+for (int i = 0; i < numTypes; i++) {
+	UniqueID typeA = data.getUniqueID(i)
+	for (int j = 0; j < numTypes; j++) {
+		UniqueID typeB = data.getUniqueID(j)
+		m.add rule: pictureType(P, typeA) >> pictureType(P, typeB), weight: initialWeight, squared: sq
+		m.add rule: pictureType(P, typeA) >> ~pictureType(P, typeB), weight: initialWeight, squared: sq
 	}
 }
 
@@ -184,7 +193,7 @@ ArrayList<double []> testImages = new ArrayList<double[]>()
 for (int i = 0; i < images.size(); i++) {
 	if (i < numTraining) {
 		trainImages.add(images.get(i))
-//	} else if (i >= images.size() - numTesting) {
+	} else if (i >= images.size() - numTesting) {
 		testImages.add(images.get(i))
 	}
 }
@@ -275,10 +284,10 @@ def labelToClose = [pixelBrightness, hasMean, pictureType] as Set
 numIterations = 10
 
 for (int i = 0; i < numIterations; i++) {
-//	// initialize weights
-//	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-//			k.setWeight(new PositiveWeight(initialWeight))
-	
+	//	// initialize weights
+	//	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
+	//			k.setWeight(new PositiveWeight(initialWeight))
+
 	log.info("Starting M-step, iteration {}", i)
 	// m-step: learns new weights
 	trainDB = data.getDatabase(trainWrite, mStepToClose, trainObs)
@@ -286,6 +295,10 @@ for (int i = 0; i < numIterations; i++) {
 	WeightLearningApplication wl = new MaxLikelihoodMPE(m, trainDB, labelDB, config)
 	wl.learn()
 	wl.close()
+	
+	// output intermediate reconstruction
+	DataOutputter.outputPredicate("output/vision/latent/"+ dataset + "-" + expSetup + "-train.txt" , trainDB, pixelBrightness, ",", true, "index,image")
+	
 	trainDB.close()
 	labelDB.close()
 
