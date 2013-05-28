@@ -97,7 +97,7 @@ PSLModel m = new PSLModel(this, data)
  * DEFINE MODEL
  */
 
-numTypes = 5
+numTypes = 10
 numMeans = 4
 variance = 0.004
 
@@ -120,7 +120,7 @@ double initialWeight = 1.0
 
 Random random = new Random(314159)
 
-//scale = 0.5;
+scale = 0.001;
 
 for (Patch p : hierarchy.getPatches().values()) {
 	UniqueID patch = data.getUniqueID(p.uniqueID())
@@ -138,10 +138,10 @@ for (Patch p : hierarchy.getPatches().values()) {
 			for (int i = 0; i < numMeans; i++) {
 				UniqueID mean = data.getUniqueID(i);
 
-				m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: false
-				m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: false
-				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight, squared: false
-				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight, squared: false
+				m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight + random.nextGaussian() * scale, squared: false
+				m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight + random.nextGaussian() * scale, squared: false
+				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight + random.nextGaussian() * scale, squared: false
+				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight + random.nextGaussian() * scale, squared: false
 			}
 		}
 		if (!mask[patchID]) {
@@ -163,7 +163,7 @@ for (int i = 0; i < numTypes; i++) {
 	for (int j = 0; j < numTypes; j++) {
 		UniqueID typeB = data.getUniqueID(j)
 		m.add rule: pictureType(P, typeA) >> pictureType(P, typeB), weight: initialWeight, squared: sq
-		m.add rule: pictureType(P, typeA) >> ~pictureType(P, typeB), weight: initialWeight, squared: sq
+		m.add rule: pictureType(P, typeA) >> ~pictureType(P, typeB), weight: 5*initialWeight, squared: sq
 	}
 }
 
