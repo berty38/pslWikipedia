@@ -54,9 +54,9 @@ int numFolds = 63;
 int numSeqs = 63;
 
 def sq = cb.getBoolean("squared", true);
-
 def computeBaseline = true;
-def baselineMethod = "hog";
+def baselineMethod = cb.getString("baseline", "acd");
+def discreteModel = cb.getBoolean("discrete", false);
 
 /* Which fold are we running? */
 int startFold = 0;
@@ -71,7 +71,12 @@ if (args.length >= 1) {
 
 ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("action");
 
-configGenerator.setModelTypes(["quad"]);
+if (discreteModel) {
+	configGenerator.setModelTypes(["bool"]);
+	sq = false;
+}
+else
+	configGenerator.setModelTypes(["quad"]);
 
 /* Learning methods */
 methods = ["MLE"];
@@ -122,7 +127,8 @@ m.add PredicateConstraint.Functional, on: doing;
 
 // (Inverse) Partial functional constraint on sameObj
 m.add PredicateConstraint.PartialFunctional, on: sameObj;
-m.add PredicateConstraint.PartialInverseFunctional, on: sameObj;
+if (!discreteModel)
+	m.add PredicateConstraint.PartialInverseFunctional, on: sameObj;
 
 /* ID MAINTENANCE: BETWEEN-FRAME RULES */
 
