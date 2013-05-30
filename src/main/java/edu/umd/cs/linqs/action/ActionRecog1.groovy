@@ -84,8 +84,8 @@ methods = ["MLE"];
 configGenerator.setLearningMethods(methods);
 
 /* MLE/MPLE options */
-configGenerator.setVotedPerceptronStepCounts([5]);
-configGenerator.setVotedPerceptronStepSizes([(double) 1.0]);
+configGenerator.setVotedPerceptronStepCounts([50]);
+configGenerator.setVotedPerceptronStepSizes([(double) 0.1]);
 //configGenerator.setVotedPerceptronStepCounts([5,50]);
 //configGenerator.setVotedPerceptronStepSizes([(double) 0.1, (double) 1.0]);
 
