@@ -48,15 +48,15 @@ def defPath = System.getProperty("java.io.tmpdir") + "/action2"
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, false), cb)
 
-def outPath = "output/action2_loo_hog/";
+def outPath = cb.getString("outpath", "output/action2/");
 int numFolds = 63;
 
 int numSeqs = 63;
 
 def sq = cb.getBoolean("squared", true);
-
 def computeBaseline = true;
-def baselineMethod = "hog";
+def baselineMethod = cb.getString("baseline", "acd");
+def discreteModel = cb.getBoolean("discrete", false);
 
 /* Which fold are we running? */
 int startFold = 0;
@@ -71,15 +71,22 @@ if (args.length >= 1) {
 
 ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("action");
 
-configGenerator.setModelTypes(["quad"]);
+if (discreteModel) {
+	configGenerator.setModelTypes(["bool"]);
+	sq = false;
+}
+else
+	configGenerator.setModelTypes(["quad"]);
 
 /* Learning methods */
 methods = ["MLE"];
 configGenerator.setLearningMethods(methods);
 
 /* MLE/MPLE options */
-configGenerator.setVotedPerceptronStepCounts([5,50]);
-configGenerator.setVotedPerceptronStepSizes([(double) 0.1, (double) 1.0]);
+configGenerator.setVotedPerceptronStepCounts([50]);
+configGenerator.setVotedPerceptronStepSizes([(double) 0.1]);
+//configGenerator.setVotedPerceptronStepCounts([5,50]);
+//configGenerator.setVotedPerceptronStepSizes([(double) 0.1, (double) 1.0]);
 
 /* MM options */
 //configGenerator.setMaxMarginSlackPenalties([(double) 0.1]);
@@ -122,7 +129,8 @@ m.add PredicateConstraint.Functional, on: doing;
 
 // (Inverse) Partial functional constraint on sameObj
 m.add PredicateConstraint.PartialFunctional, on: sameObj;
-m.add PredicateConstraint.PartialInverseFunctional, on: sameObj;
+if (!discreteModel)
+	m.add PredicateConstraint.PartialInverseFunctional, on: sameObj;
 
 /* ID MAINTENANCE: BETWEEN-FRAME RULES */
 
