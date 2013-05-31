@@ -283,6 +283,15 @@ public class PatchStructure {
 	public int getDepth() {
 		return depth;
 	}
+	
+	public void close() {
+		parent.clear();
+		north.clear();
+		east.clear();
+		mirrorHorizontal.clear();
+		mirrorVertical.clear();
+		patches.clear();		
+	}
 
 
 	private int branching;

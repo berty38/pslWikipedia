@@ -39,6 +39,8 @@ import edu.umd.cs.psl.model.atom.RandomVariableAtom
 import edu.umd.cs.psl.model.kernel.CompatibilityKernel
 import edu.umd.cs.psl.model.parameters.Weight
 import edu.umd.cs.psl.model.predicate.Predicate
+import edu.umd.cs.psl.reasoner.bool.BooleanMCSatFactory
+import edu.umd.cs.psl.reasoner.bool.BooleanMaxWalkSatFactory
 import edu.umd.cs.psl.ui.loading.*
 import edu.umd.cs.psl.util.database.Queries
 
@@ -52,7 +54,7 @@ ExperimentConfigGenerator configGenerator = new ExperimentConfigGenerator("epini
  * "quad" HLEF
  * "bool" MLN
  */
-configGenerator.setModelTypes(["quad"]);
+configGenerator.setModelTypes(["bool"]);
 
 /*
  * SET LEARNING ALGORITHMS
@@ -327,6 +329,13 @@ for (int fold = 0; fold < folds; fold++) {
 		for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
 			k.setWeight(weights.get(k))
 
+
+		/**
+		* CHANGE INFERENCE ENGINE FOR DISCRETE MRF
+		*/
+
+		config.setProperty(MPEInference.REASONER_KEY, new BooleanMaxWalkSatFactory())
+
 		/*
 		 * Weight learning
 		 */
@@ -350,6 +359,13 @@ for (int fold = 0; fold < folds; fold++) {
 		}
 
 		System.out.println("Learned model " + config.getString("name", "") + "\n" + m.toString())
+
+
+		/**
+		* CHANGE INFERENCE BACK FOR TEST
+		*/
+
+		config.setProperty(MPEInference.REASONER_KEY, new BooleanMCSatFactory())
 
 		/*
 		 * Inference on test set

@@ -1,5 +1,5 @@
 clear;
-filename = '../output/vision/latent/olivetti-small-left-model.txt';
+filename = '../output/vision/latent/caltech-small-left-model-0.txt';
 
 
 width = 32;
@@ -51,7 +51,7 @@ end
 posPrior = reshape(posPrior, height, width/2);
 negPrior = reshape(negPrior, height, width/2);
 
-%%
+%
 figure(3);
 subplot(131);
 imagesc([posPrior; negPrior]);

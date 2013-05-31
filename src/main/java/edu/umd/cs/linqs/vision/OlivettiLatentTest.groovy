@@ -41,11 +41,15 @@ Logger log = LoggerFactory.getLogger(this.class)
 // test on left half of face (bottom if false)
 testLeft = true
 // number of training faces
-numTraining = 50
+numTraining = 4
 // number of testing faces
-numTesting = 50
+numTesting = 4
+numTypes = 2
+numMeans = 4
+variance = 0.004
 
-dataset = "olivetti-small"
+
+dataset = "caltech-small"
 
 width = 32
 height = 32
@@ -97,9 +101,6 @@ PSLModel m = new PSLModel(this, data)
  * DEFINE MODEL
  */
 
-numTypes = 10
-numMeans = 4
-variance = 0.004
 
 branching = 2
 depth = 7
@@ -114,13 +115,14 @@ m.add predicate: "pixelBrightness", types: [ArgumentType.UniqueID, ArgumentType.
 m.add predicate: "picture", types: [ArgumentType.UniqueID]
 m.add predicate: "pictureType", types: [ArgumentType.UniqueID, ArgumentType.UniqueID]
 
-//m.add PredicateConstraint.Functional , on : pictureType
-
-double initialWeight = 1.0
+//for (int i = 0; i < 1000; i++)
+//	m.add PredicateConstraint.Functional , on : pictureType
 
 Random random = new Random(314159)
 
-scale = 0.001;
+double initialWeight = 1.0
+double scale = 1;
+
 
 for (Patch p : hierarchy.getPatches().values()) {
 	UniqueID patch = data.getUniqueID(p.uniqueID())
@@ -138,32 +140,19 @@ for (Patch p : hierarchy.getPatches().values()) {
 			for (int i = 0; i < numMeans; i++) {
 				UniqueID mean = data.getUniqueID(i);
 
-				m.add rule: (picture(pic) & pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight + random.nextGaussian() * scale, squared: false
-				m.add rule: (picture(pic) & pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight + random.nextGaussian() * scale, squared: false
-				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> hasMean(pic, patch, mean), weight: initialWeight + random.nextGaussian() * scale, squared: false
-				m.add rule: (picture(pic) & ~pictureType(pic, type)) >> ~hasMean(pic, patch, mean), weight: initialWeight + random.nextGaussian() * scale, squared: false
+				m.add rule: (picture(pic) & hasMean(pic, patch, mean)) >> pictureType(pic, type), weight: scale * initialWeight, squared: false
+				m.add rule: (picture(pic) & hasMean(pic, patch, mean)) >> ~pictureType(pic, type), weight: scale * initialWeight, squared: false
 			}
 		}
 		if (!mask[patchID]) {
 			// if patch is in output set, add rules to infer pixel truth value from pictureType
 			m.add rule: (picture(pic) & pictureType(pic, type)) >> pixelbrightness(pic, patch), weight: initialWeight, squared: sq
 			m.add rule: (picture(pic) & pictureType(pic, type)) >> ~pixelbrightness(pic, patch), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & ~(pictureType(pic, type))) >> pixelbrightness(pic, patch), weight: initialWeight, squared: sq
-			m.add rule: (picture(pic) & ~(pictureType(pic, type))) >> ~pixelbrightness(pic, patch), weight: initialWeight, squared: sq
 		}
 	}
 	if (!mask[patchID]) {
-		m.add rule: picture(pic) >> pixelBrightness(pic, patch), weight: initialWeight, squared: sq
-		m.add rule: picture(pic) >> ~pixelBrightness(pic, patch), weight: initialWeight, squared: sq
-	}
-}
-
-for (int i = 0; i < numTypes; i++) {
-	UniqueID typeA = data.getUniqueID(i)
-	for (int j = 0; j < numTypes; j++) {
-		UniqueID typeB = data.getUniqueID(j)
-		m.add rule: pictureType(P, typeA) >> pictureType(P, typeB), weight: initialWeight, squared: sq
-		m.add rule: pictureType(P, typeA) >> ~pictureType(P, typeB), weight: 5*initialWeight, squared: sq
+//		m.add rule: picture(pic) >> pixelBrightness(pic, patch), weight: initialWeight, squared: sq
+//		m.add rule: picture(pic) >> ~pixelBrightness(pic, patch), weight: initialWeight, squared: sq
 	}
 }
 
@@ -193,7 +182,7 @@ ArrayList<double []> testImages = new ArrayList<double[]>()
 for (int i = 0; i < images.size(); i++) {
 	if (i < numTraining) {
 		trainImages.add(images.get(i))
-	} else if (i >= images.size() - numTesting) {
+		//	} else if (i >= images.size() - numTesting) {
 		testImages.add(images.get(i))
 	}
 }
@@ -210,8 +199,6 @@ for (int i = 0; i < testImages.size(); i++) {
 	UniqueID imageID = data.getUniqueID(i)
 	picInserter.insert(imageID)
 }
-
-Random rand = new Random(0)
 
 /** load images into base pixels **/
 def trainReadDB = data.getDatabase(trainObs)
@@ -261,6 +248,10 @@ testWriteDB.close()
 testReadDB.close()
 testLabelDB.close()
 
+// clear hierarchy
+hierarchy.close()
+hierarchy = null
+
 
 testDB = data.getDatabase(testWrite, testObs)
 /** populate open variables **/
@@ -281,71 +272,96 @@ def labelToClose = [pixelBrightness, hasMean, pictureType] as Set
  * Weight learning
  */
 
-numIterations = 10
+numIterations = 100
+score = 0
 
 for (int i = 0; i < numIterations; i++) {
-	//	// initialize weights
+
 	//	for (CompatibilityKernel k : Iterables.filter(m.getKernels(), CompatibilityKernel.class))
-	//			k.setWeight(new PositiveWeight(initialWeight))
+	//		k.setWeight(new PositiveWeight(initialWeight))
+
+	/********************
+	 * M-STEP
+	 ********************/
 
 	log.info("Starting M-step, iteration {}", i)
 	// m-step: learns new weights
 	trainDB = data.getDatabase(trainWrite, mStepToClose, trainObs)
+	//	populateLatentVariables(trainImages.size(), pictureType, numTypes, trainDB, random)
+	//	for (int j = 0; j < trainImages.size(); j++) {
+	//		UniqueID imageID = trainDB.getUniqueID(j)
+	//		ImagePatchUtils.populatePixels(width, height, pixelbrightness, trainDB, imageID);
+	//	}
+
 	labelDB = data.getDatabase(trainLabel, labelToClose, trainLatent)
 	WeightLearningApplication wl = new MaxLikelihoodMPE(m, trainDB, labelDB, config)
+	//	WeightLearningApplication wl = new MaxPseudoLikelihood(m, trainDB, labelDB, config)
 	wl.learn()
 	wl.close()
-	
+
 	// output intermediate reconstruction
-	DataOutputter.outputPredicate("output/vision/latent/"+ dataset + "-" + expSetup + "-train.txt" , trainDB, pixelBrightness, ",", true, "index,image")
-	
+	DataOutputter.outputPredicate("output/vision/latent/"+ dataset + "-" + expSetup + "-train-" + i + ".txt" , trainDB, pixelBrightness, ",", true, "index,image")
+
 	trainDB.close()
 	labelDB.close()
 
+	// output intermediate model
+	DataOutputter.outputModel("output/vision/latent/"+ dataset + "-" + expSetup + "-model-" + i + ".txt", m)
+
+
+	/********************
+	 * E-STEP
+	 ********************/
+
 	log.info("Starting E-step, iteration {}", i)
-	// e-step: infers picture type
 	eStepDB = data.getDatabase(trainLatent, eStepToClose, trainObs, trainLabel)
+	populateLatentVariables(trainImages.size(), pictureType, numTypes, eStepDB, random)
+
 	MPEInference mpe = new MPEInference(m, eStepDB, config);
 	mpe.mpeInference();
 	mpe.close();
 	eStepDB.close();
+
+
+
+	/********************
+	 * TESTING
+	 ********************/
+
+
+	log.info("Starting inference on test set")
+	def testDB = data.getDatabase(testWrite, mStepToClose, testObs)
+	mpe = new MPEInference(m, testDB, config)
+	FullInferenceResult result = mpe.mpeInference()
+
+	//ImagePatchUtils.decodeBrightness(hasMean, mean, pixelBrightness, picture, testDB, width, height, numMeans)
+
+	DataOutputter.outputPredicate("output/vision/latent/"+ dataset + "-" + expSetup + "-" + i + ".txt" , testDB, pixelBrightness, ",", true, "index,image")
+	mpe.close()
+	testDB.close()
+
+	/*
+	 * Evaluation
+	 */
+	def groundTruthDB = data.getDatabase(testLabel, labelToClose)
+	testDB = data.getDatabase(testWrite)
+	def comparator = new ContinuousPredictionComparator(testDB)
+	comparator.setBaseline(groundTruthDB)
+
+	def metric = ContinuousPredictionComparator.Metric.MSE
+	comparator.setMetric(metric)
+	score = comparator.compare(pixelBrightness) * (255 * 255) // scale to full 256 grayscale range
+
+	log.warn("Mean squared error, EM iteration " + i + ": " + score)
+
+	// close all databases
+	groundTruthDB.close()
+	testDB.close()
 }
 
-log.info("Starting inference on test set")
-/*
- * Inference on test set
- */
-def testDB = data.getDatabase(testWrite, mStepToClose, testObs)
-MPEInference mpe = new MPEInference(m, testDB, config)
-FullInferenceResult result = mpe.mpeInference()
+System.out.println(dataset + "-" + expSetup + ", final mean squared error: " + score)
 
-//ImagePatchUtils.decodeBrightness(hasMean, mean, pixelBrightness, picture, testDB, width, height, numMeans)
 
-DataOutputter.outputPredicate("output/vision/latent/"+ dataset + "-" + expSetup + ".txt" , testDB, pixelBrightness, ",", true, "index,image")
-testDB.close()
-
-/*
- * Evaluation
- */
-def groundTruthDB = data.getDatabase(testLabel, labelToClose)
-testDB = data.getDatabase(testWrite)
-def comparator = new ContinuousPredictionComparator(testDB)
-comparator.setBaseline(groundTruthDB)
-
-def metric = ContinuousPredictionComparator.Metric.MSE
-comparator.setMetric(metric)
-score = comparator.compare(pixelBrightness) * (255 * 255) // scale to full 256 grayscale range
-
-log.info("Mean squared error: " + score)
-
-// close all databases
-groundTruthDB.close()
-testDB.close()
-
-System.out.println(dataset + "-" + expSetup + ", mean squared error: " + score)
-
-// output model
-DataOutputter.outputModel("output/vision/latent/"+ dataset + "-" + expSetup + "-model.txt", m)
 
 
 
@@ -355,11 +371,27 @@ private void populateLatentVariables(int numImages, Predicate latentVariable, in
 		for (j = 0; j < numTypes; j++) {
 			UniqueID typeID = db.getUniqueID(j);
 			RandomVariableAtom latentAtom = db.getAtom(latentVariable, pic, typeID)
-			//			latentAtom.setValue((rand.nextBoolean())? 0.0 : 1.0);
+			//			latentAtom.setValue(1 / (double) numTypes);
 			latentAtom.setValue(rand.nextDouble());
+			//			latentAtom.setValue(1.0);
 			latentAtom.commitToDB();
 		}
 	}
+
+//	ArrayList<Integer> index = new ArrayList<Integer>(numImages);
+//	for (int i = 0; i < numImages; i++)
+//		index.add(i)
+//
+//	Collections.shuffle(index, rand)
+//
+//
+//	for (int i = 0; i < numTypes; i++) {
+//		UniqueID imageID = db.getUniqueID(index.get(i % numImages));
+//		UniqueID typeID = db.getUniqueID(i);
+//		RandomVariableAtom latentAtom = db.getAtom(latentVariable, imageID, typeID)
+//		latentAtom.setValue(1.0);
+//		latentAtom.commitToDB();
+//	}
 }
 
 
