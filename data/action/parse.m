@@ -22,16 +22,20 @@ fid_seqframes = fopen([fid_pfx 'inseqframes.txt'], 'w');
 % fid_nhogscores = fopen([fid_pfx 'nhogscores.txt'], 'w');
 fid_acdframelabel = fopen([fid_pfx 'acdframelabel.txt'], 'w');
 fid_hogframelabel = fopen([fid_pfx 'hogframelabel.txt'], 'w');
+fid_acdseqlabel = fopen([fid_pfx 'acdseqlabel.txt'], 'w');
+fid_hogseqlabel = fopen([fid_pfx 'hogseqlabel.txt'], 'w');
 
 for s=1:length(anno)
 	if length(anno{s}) > maxFrames
 		error('Too many frames in seq %d: %d frames', s, length(anno{s}))
 	end
+	hoglabscores_s = zeros(length(actions),1);
+	acdlabscores_s = zeros(length(actions),1);
 	for f=1:length(anno{s})
 		frid = s*maxFrames + f;
 		inframe = [];
-		hoglabscores = zeros(length(actions),1);
-		acdlabscores = zeros(length(actions),1);
+		hoglabscores_f = zeros(length(actions),1);
+		acdlabscores_f = zeros(length(actions),1);
 		if length(anno{s}{f}) > maxBoxes
 			error('Too many boxes in seq %d, frame %d: %d boxes', s, f, length(anno{s}{f}))
 		end
@@ -67,8 +71,8 @@ for s=1:length(anno)
 					fprintf(fid_acdaction, '%d\t%d\t%f\n', bbid, actions(a), acdprob(a));
 				end
 				% count predicted frame labels
-				hoglabscores = hoglabscores + feat{s}{f}(b).hogscore';
-				acdlabscores = acdlabscores + feat{s}{f}(b).acscore';
+				hoglabscores_f = hoglabscores_f + feat{s}{f}(b).hogscore';
+				acdlabscores_f = acdlabscores_f + feat{s}{f}(b).acscore';
 				% write nhogscores
 % 				for l=1:length(feat{s}{f}(b).nhogscore)
 % 					fprintf(fid_nhogscores, '%d\t%d\t%f\n', bbid, l, feat{s}{f}(b).nhogscore(l));
@@ -85,15 +89,24 @@ for s=1:length(anno)
 			end
 		end
 		% convert frame label scores to probs
-		hoglabprobs = svm2prob(hoglabscores);
-		for a=1:length(hoglabscores)
+		hoglabprobs = svm2prob(hoglabscores_f);
+		acdlabprobs = svm2prob(acdlabscores_f);
+		for a=1:length(actions)
 			fprintf(fid_hogframelabel, '%d\t%d\t%f\n', frid, actions(a), hoglabprobs(a));
-		end
-		% convert frame label scores to probs
-		acdlabprobs = svm2prob(acdlabscores);
-		for a=1:length(acdlabscores)
 			fprintf(fid_acdframelabel, '%d\t%d\t%f\n', frid, actions(a), acdlabprobs(a));
 		end
+		% accumulate frame labels
+		for a=1:length(actions)
+			hoglabscores_s = hoglabscores_s + hoglabscores_f;
+			acdlabscores_s = acdlabscores_s + acdlabscores_f;
+		end
+	end
+	% convert seq label scores to probs
+	hoglabprobs = svm2prob(hoglabscores_s);
+	acdlabprobs = svm2prob(acdlabscores_s);
+	for a=1:length(actions)
+		fprintf(fid_hogseqlabel, '%d\t%d\t%f\n', s, actions(a), hoglabprobs(a));
+		fprintf(fid_acdseqlabel, '%d\t%d\t%f\n', s, actions(a), acdlabprobs(a));
 	end
 end
 
@@ -122,16 +135,20 @@ fid_seqframes = fopen([fid_pfx 'inseqframes.txt'], 'w');
 % fid_nhogscores = fopen([fid_pfx 'nhogscores.txt'], 'w');
 fid_acdframelabel = fopen([fid_pfx 'acdframelabel.txt'], 'w');
 fid_hogframelabel = fopen([fid_pfx 'hogframelabel.txt'], 'w');
+fid_acdseqlabel = fopen([fid_pfx 'acdseqlabel.txt'], 'w');
+fid_hogseqlabel = fopen([fid_pfx 'hogseqlabel.txt'], 'w');
 
 for s=1:length(anno)
 	if length(anno{s}) > maxFrames
 		error('Too many frames in seq %d: %d frames', s, length(anno{s}))
 	end
+	hoglabscores_s = zeros(length(actions),1);
+	acdlabscores_s = zeros(length(actions),1);
 	for f=1:length(anno{s})
 		frid = s*maxFrames + f;
 		inframe = [];
-		hoglabscores = zeros(length(actions),1);
-		acdlabscores = zeros(length(actions),1);
+		hoglabscores_f = zeros(length(actions),1);
+		acdlabscores_f = zeros(length(actions),1);
 		if length(anno{s}{f}) > maxBoxes
 			error('Too many boxes in seq %d, frame %d: %d boxes', s, f, length(anno{s}{f}))
 		end
@@ -167,8 +184,8 @@ for s=1:length(anno)
 					fprintf(fid_acdaction, '%d\t%d\t%f\n', bbid, actions(a), acdprob(a));
 				end
 				% count predicted frame labels
-				hoglabscores = hoglabscores + feat{s}{f}(b).hogscore';
-				acdlabscores = acdlabscores + feat{s}{f}(b).acscore';
+				hoglabscores_f = hoglabscores_f + feat{s}{f}(b).hogscore';
+				acdlabscores_f = acdlabscores_f + feat{s}{f}(b).acscore';
 				% write nhogscores
 % 				for l=1:length(feat{s}{f}(b).nhogscore)
 % 					fprintf(fid_nhogscores, '%d\t%d\t%f\n', bbid, l, feat{s}{f}(b).nhogscore(l));
@@ -185,15 +202,24 @@ for s=1:length(anno)
 			end
 		end
 		% convert frame label scores to probs
-		hoglabprobs = svm2prob(hoglabscores);
-		for a=1:length(hoglabscores)
+		hoglabprobs = svm2prob(hoglabscores_f);
+		acdlabprobs = svm2prob(acdlabscores_f);
+		for a=1:length(actions)
 			fprintf(fid_hogframelabel, '%d\t%d\t%f\n', frid, actions(a), hoglabprobs(a));
-		end
-		% convert frame label scores to probs
-		acdlabprobs = svm2prob(acdlabscores);
-		for a=1:length(acdlabscores)
 			fprintf(fid_acdframelabel, '%d\t%d\t%f\n', frid, actions(a), acdlabprobs(a));
 		end
+		% accumulate frame labels
+		for a=1:length(actions)
+			hoglabscores_s = hoglabscores_s + hoglabscores_f;
+			acdlabscores_s = acdlabscores_s + acdlabscores_f;
+		end
+	end
+	% convert seq label scores to probs
+	hoglabprobs = svm2prob(hoglabscores_s);
+	acdlabprobs = svm2prob(acdlabscores_s);
+	for a=1:length(actions)
+		fprintf(fid_hogseqlabel, '%d\t%d\t%f\n', s, actions(a), hoglabprobs(a));
+		fprintf(fid_acdseqlabel, '%d\t%d\t%f\n', s, actions(a), acdlabprobs(a));
 	end
 end
 

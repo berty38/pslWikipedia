@@ -22,7 +22,7 @@ ConfigManager cm = ConfigManager.getManager();
 ConfigBundle cb = cm.getBundle("action");
 
 //def defPath = "data/action/action";
-def defPath = System.getProperty("java.io.tmpdir") + "/action2"
+def defPath = System.getProperty("java.io.tmpdir") + "/" + cb.getString("dbname", "action2");
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, true), cb)
 
@@ -50,6 +50,8 @@ m.add predicate: "hogAction", types: [ArgumentType.UniqueID,ArgumentType.Integer
 m.add predicate: "acdAction", types: [ArgumentType.UniqueID,ArgumentType.Integer];
 m.add predicate: "hogFrameAction", types: [ArgumentType.Integer,ArgumentType.Integer];
 m.add predicate: "acdFrameAction", types: [ArgumentType.Integer,ArgumentType.Integer];
+m.add predicate: "hogSeqAction", types: [ArgumentType.Integer,ArgumentType.Integer];
+m.add predicate: "acdSeqAction", types: [ArgumentType.Integer,ArgumentType.Integer];
 
 
 /** DATASTORE PARTITIONS **/
@@ -94,5 +96,9 @@ inserters = InserterUtils.getMultiPartitionInserters(data, hogFrameAction, parti
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogframelabel.txt", "\t", 1000);
 inserters = InserterUtils.getMultiPartitionInserters(data, acdFrameAction, partitions[0], numSeqs);
 InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "acdframelabel.txt", "\t", 1000);
+inserters = InserterUtils.getMultiPartitionInserters(data, hogSeqAction, partitions[0], numSeqs);
+InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "hogseqlabel.txt", "\t", 1);
+inserters = InserterUtils.getMultiPartitionInserters(data, acdSeqAction, partitions[0], numSeqs);
+InserterUtils.loadDelimitedDataTruthMultiPartition(inserters, filePfx + "acdseqlabel.txt", "\t", 1);
 
 log.info("Done!");

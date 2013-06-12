@@ -45,7 +45,7 @@ ConfigManager cm = ConfigManager.getManager();
 ConfigBundle cb = cm.getBundle("action");
 
 //def defPath = "data/action/action";
-def defPath = System.getProperty("java.io.tmpdir") + "/action1"
+def defPath = System.getProperty("java.io.tmpdir") + "/" + cb.getString("dbname", "action1");
 def dbpath = cb.getString("dbpath", defPath)
 DataStore data = new RDBMSDataStore(new H2DatabaseDriver(Type.Disk, dbpath, false), cb)
 
@@ -108,7 +108,7 @@ PSLModel m = new PSLModel(this, data);
 
 /* PREDICATES (STORED IN DB) */
 
-def obsPreds = [inFrame, inSameFrame, inSeqFrames, dims, hogAction, acdAction, hogFrameAction, acdFrameAction] as Set;
+def obsPreds = [inFrame, inSameFrame, inSeqFrames, dims, hogAction, acdAction, hogFrameAction, acdFrameAction, hogSeqAction, acdSeqAction] as Set;
 def targetPreds = [doing, sameObj] as Set;
 
 /* CONSTANTS */
@@ -150,12 +150,16 @@ for (int a1 : actions) {
 		m.add rule: hogAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
 		// Frame label
 		m.add rule: ( inFrame(BB,S,F) & hogFrameAction(F,a1) ) >> doing(BB,a1), weight: 0.1, squared: sq;
+		// Seq label
+		m.add rule: ( inFrame(BB,S,F) & hogSeqAction(S,a1) ) >> doing(BB,a1), weight: 0.1, squared: sq;
 	}
 	else {
 		// ACD-based SVM probabilities
 		m.add rule: acdAction(BB,a1) >> doing(BB,a1), weight: 1.0, squared: sq;
 		// Frame label
 		m.add rule: ( inFrame(BB,S,F) & acdFrameAction(F,a1) ) >> doing(BB,a1), weight: 0.1, squared: sq;
+		// Seq label
+		m.add rule: ( inFrame(BB,S,F) & acdSeqAction(S,a1) ) >> doing(BB,a1), weight: 0.1, squared: sq;
 	}
 
 	// Continuity of actions
